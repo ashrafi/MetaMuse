@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Serenity</string>
+    <string name="presence_status_active">Harmonic Presence • Deep Reflection Mode</string>
+    <string name="greeting_title">Good morning, Maya</string>
+    <string name="greeting_subtitle">Serenity is attuned to your cognitive flow today.</string>
+</resources>

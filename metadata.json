@@ -1,0 +1,8 @@
+{
+  "name": "Serenity",
+  "description": "Luminous Serenity: A radiant personal superintelligence companion embodying soft tactility, conversational calm, and intuitive clarity.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
