@@ -2,17 +2,21 @@ package com.example.data
 
 import com.example.model.AccentType
 import com.example.model.CareActionLog
+import com.example.model.ChannelMetricItem
+import com.example.model.ChannelTelemetryReport
 import com.example.model.ChatMessage
 import com.example.model.DailyRhythmBlock
+import com.example.model.DemoRecoveryStage
 import com.example.model.LifeQuest
+import com.example.model.LifeSyncIntegrations
 import com.example.model.MemoryItem
+import com.example.model.MetaAiConfig
+import com.example.model.MuseDemoScenario
+import com.example.model.MuseLifeAdvice
 import com.example.model.PresenceMode
+import com.example.model.SyntheticTelemetrySnapshot
 import com.example.model.TamagotchiMood
 import com.example.model.TamagotchiState
-import com.example.model.MetaAiConfig
-import com.example.model.MuseLifeAdvice
-import com.example.model.MusePillarAdvice
-import com.example.model.LifeSyncIntegrations
 import com.example.model.ThoughtStep
 import com.example.model.ThoughtStream
 import com.example.model.VitalityCheckin
@@ -42,10 +46,21 @@ class SerenityRepository {
             speech = "I feel so radiant today! You've nurtured our mind and body beautifully.",
             equippedAccessory = "Celestial Halo",
             isSleeping = false,
-            totalPets = 42
+            totalPets = 42,
+            activeScenario = MuseDemoScenario.NONE,
+            recoveryStage = DemoRecoveryStage.RECOVERED_HAPPY
         )
     )
     val tamagotchiState: StateFlow<TamagotchiState> = _tamagotchiState.asStateFlow()
+
+    private val _activeDemoScenario = MutableStateFlow(MuseDemoScenario.NONE)
+    val activeDemoScenario: StateFlow<MuseDemoScenario> = _activeDemoScenario.asStateFlow()
+
+    private val _demoRecoveryStage = MutableStateFlow(DemoRecoveryStage.RECOVERED_HAPPY)
+    val demoRecoveryStage: StateFlow<DemoRecoveryStage> = _demoRecoveryStage.asStateFlow()
+
+    private val _telemetrySnapshot = MutableStateFlow(buildTelemetrySnapshot(MuseDemoScenario.NONE, false))
+    val telemetrySnapshot: StateFlow<SyntheticTelemetrySnapshot> = _telemetrySnapshot.asStateFlow()
 
     private val _careLogs = MutableStateFlow<List<CareActionLog>>(initialCareLogs())
     val careLogs: StateFlow<List<CareActionLog>> = _careLogs.asStateFlow()
@@ -91,6 +106,275 @@ class SerenityRepository {
 
     private val _integrations = MutableStateFlow(LifeSyncIntegrations())
     val integrations: StateFlow<LifeSyncIntegrations> = _integrations.asStateFlow()
+
+    /**
+     * Deterministic Event Detection & Synthetic Data Pump for the 3 MuseLife Demos.
+     * Pre-loads multi-channel history, evaluates the rules engine, makes the companion
+     * visibly sick/sad, and proactively initiates the conversation on the Home tab.
+     */
+    fun activateDemoScenario(scenario: MuseDemoScenario) {
+        _activeDemoScenario.value = scenario
+        val timeStr = currentTimeFormatted()
+        val snap = buildTelemetrySnapshot(scenario, isRecovered = false)
+        _telemetrySnapshot.value = snap
+
+        when (scenario) {
+            MuseDemoScenario.NONE -> {
+                _demoRecoveryStage.value = DemoRecoveryStage.RECOVERED_HAPPY
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    hydration = 0.85f,
+                    focus = 0.90f,
+                    innerPeace = 0.82f,
+                    physicalEnergy = 0.78f,
+                    connection = 0.80f,
+                    mood = TamagotchiMood.RADIANT,
+                    speech = "I feel so radiant today! You've nurtured our mind and body beautifully.",
+                    isSleeping = false,
+                    activeScenario = MuseDemoScenario.NONE,
+                    recoveryStage = DemoRecoveryStage.RECOVERED_HAPPY
+                )
+                _integrations.value = LifeSyncIntegrations(
+                    googleHealthConnected = true,
+                    googleHealthStats = "7,840 steps • 7.4h sleep • 1.8L water synced",
+                    facebookConnected = true,
+                    facebookStats = "Synced: 4 close friend interactions & community circles",
+                    financeAppConnected = true,
+                    financeAppStats = "Daily mindful budget on track • Peace of mind +15%",
+                    tasksAppConnected = true,
+                    tasksAppStats = "4 of 5 focus tasks completed today (+20% Flow)"
+                )
+                _messages.value = initialMessages()
+            }
+
+            MuseDemoScenario.SUCCESS_TRAP -> {
+                _demoRecoveryStage.value = DemoRecoveryStage.PROACTIVE_CONCERN
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    hydration = 0.58f,
+                    focus = 0.98f, // High task output
+                    innerPeace = 0.36f,
+                    physicalEnergy = 0.30f, // Sleep dropped 7.5 -> 5.0h
+                    connection = 0.28f, // 3 canceled friend plans
+                    mood = TamagotchiMood.SICK,
+                    speech = "I've noticed something, and it's worrying me. You're getting more done than ever, and your savings are growing. But you're barely sleeping, and you've canceled plans with people you care about three weeks in a row.",
+                    isSleeping = false,
+                    activeScenario = MuseDemoScenario.SUCCESS_TRAP,
+                    recoveryStage = DemoRecoveryStage.PROACTIVE_CONCERN
+                )
+                _integrations.value = LifeSyncIntegrations(
+                    googleHealthConnected = true,
+                    googleHealthStats = "ALERT: Sleep dropped from 7.5h to 5.0h over two weeks",
+                    facebookConnected = true,
+                    facebookStats = "ALERT: 3 canceled plans with close friends; 0 social time this week",
+                    financeAppConnected = true,
+                    financeAppStats = "Savings increased +20% this month",
+                    tasksAppConnected = true,
+                    tasksAppStats = "98% complete • Working past midnight every night"
+                )
+                _vitalityCheckin.value = VitalityCheckin(
+                    clarityScore = 76,
+                    emotionalEquilibrium = 42,
+                    restorativePeace = 35,
+                    moodWord = "Overworked & Depleted"
+                )
+                val proactiveMsg = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    isFromUser = false,
+                    content = "I've noticed something, and it's worrying me. You're getting more done than ever, and your savings are growing. But you're barely sleeping, and you've canceled plans with people you care about three weeks in a row.",
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("Deterministic Rule Triggered", "The Success Trap: High Task/Finance metrics masking severe Health & Social erosion"),
+                        ThoughtStep("Health Channel", "Sleep dropped from 7.5h to 5.0h over 14 days"),
+                        ThoughtStep("Tasks & Finance Channels", "98% tasks complete (late night commits); Savings +20%"),
+                        ThoughtStep("Social Channel", "3 canceled plans with close friends; 0 meaningful social hours")
+                    ),
+                    suggestedPrompts = listOf(
+                        "I'm working hard now so I can have a better life later."
+                    ),
+                    category = "Demo 1 • The Success Trap"
+                )
+                _messages.value = listOf(proactiveMsg)
+            }
+
+            MuseDemoScenario.INVISIBLE_MONEY_LEAK -> {
+                _demoRecoveryStage.value = DemoRecoveryStage.PROACTIVE_CONCERN
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    hydration = 0.52f,
+                    focus = 0.86f,
+                    innerPeace = 0.34f, // Stressful evenings + savings falling behind
+                    physicalEnergy = 0.38f, // Poor sleep consecutive nights
+                    connection = 0.40f, // Most evenings spent alone at home
+                    mood = TamagotchiMood.SICK,
+                    speech = "Can we talk about your evenings? I've noticed that when you're exhausted and spending more time alone, you tend to order food and spend more money. I'm worried you're stuck in a cycle that's making things harder.",
+                    isSleeping = false,
+                    activeScenario = MuseDemoScenario.INVISIBLE_MONEY_LEAK,
+                    recoveryStage = DemoRecoveryStage.PROACTIVE_CONCERN
+                )
+                _integrations.value = LifeSyncIntegrations(
+                    googleHealthConnected = true,
+                    googleHealthStats = "ALERT: Poor sleep (5.4h) on 5 consecutive nights",
+                    facebookConnected = true,
+                    facebookStats = "Most evenings spent alone at home (6 of 7 nights)",
+                    financeAppConnected = true,
+                    financeAppStats = "ALERT: 9 small food-delivery orders ($284) • Savings falling behind",
+                    tasksAppConnected = true,
+                    tasksAppStats = "Important tasks done, but high evening stress load"
+                )
+                _vitalityCheckin.value = VitalityCheckin(
+                    clarityScore = 68,
+                    emotionalEquilibrium = 45,
+                    restorativePeace = 40,
+                    moodWord = "Evening Exhaustion Loop"
+                )
+                val proactiveMsg = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    isFromUser = false,
+                    content = "Can we talk about your evenings? I've noticed that when you're exhausted and spending more time alone, you tend to order food and spend more money. I'm worried you're stuck in a cycle that's making things harder.",
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("Deterministic Rule Triggered", "The Invisible Money Leak: Cross-channel evening exhaustion → convenience spend loop"),
+                        ThoughtStep("Health & Tasks Channels", "Poor sleep on consecutive nights + stressful evening workload"),
+                        ThoughtStep("Social Channel", "Most evenings spent alone at home without decompression"),
+                        ThoughtStep("Finance Channel", "Recurring small food-delivery & convenience purchases; savings goal slipping")
+                    ),
+                    suggestedPrompts = listOf(
+                        "I'm just tired when I get home. Ordering food is the only thing I feel like doing."
+                    ),
+                    category = "Demo 2 • The Invisible Money Leak"
+                )
+                _messages.value = listOf(proactiveMsg)
+            }
+
+            MuseDemoScenario.CONNECTION_DEBT -> {
+                _demoRecoveryStage.value = DemoRecoveryStage.PROACTIVE_CONCERN
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    hydration = 0.88f,
+                    focus = 0.92f,
+                    innerPeace = 0.68f,
+                    physicalEnergy = 0.88f, // Good sleep and exercise
+                    connection = 0.24f, // Postponed sibling call, missed birthday, rescheduled family visit
+                    mood = TamagotchiMood.SAD,
+                    speech = "I've been thinking about something. You've been taking good care of yourself, staying on top of your responsibilities, and making progress with your money. But you've postponed calling your sibling several times, and you missed your friend's birthday.",
+                    isSleeping = false,
+                    activeScenario = MuseDemoScenario.CONNECTION_DEBT,
+                    recoveryStage = DemoRecoveryStage.PROACTIVE_CONCERN
+                )
+                _integrations.value = LifeSyncIntegrations(
+                    googleHealthConnected = true,
+                    googleHealthStats = "7.8h sleep • 9,200 steps • Physically thriving",
+                    facebookConnected = true,
+                    facebookStats = "ALERT: Postponed sibling call 3x • Missed friend's birthday • Family visit rescheduled 2x",
+                    financeAppConnected = true,
+                    financeAppStats = "Budget on track • Emergency & goal savings growing",
+                    tasksAppConnected = true,
+                    tasksAppStats = "100% of daily tasks completed on schedule"
+                )
+                _vitalityCheckin.value = VitalityCheckin(
+                    clarityScore = 90,
+                    emotionalEquilibrium = 62,
+                    restorativePeace = 64,
+                    moodWord = "Quiet Relational Drift"
+                )
+                val proactiveMsg = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    isFromUser = false,
+                    content = "I've been thinking about something. You've been taking good care of yourself, staying on top of your responsibilities, and making progress with your money. But you've postponed calling your sibling several times, and you missed your friend's birthday.",
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("Deterministic Rule Triggered", "The Connection Debt: Gap between stated core values and relational actions"),
+                        ThoughtStep("Health, Tasks & Finance", "All green: 7.8h sleep, 100% tasks done, budget & savings on track"),
+                        ThoughtStep("Social & Values Mismatch", "Sibling call postponed 3x, missed close friend's birthday, family visit rescheduled twice")
+                    ),
+                    suggestedPrompts = listOf(
+                        "I've just had other things to do. I'll get around to it."
+                    ),
+                    category = "Demo 3 • The Connection Debt"
+                )
+                _messages.value = listOf(proactiveMsg)
+            }
+        }
+    }
+
+    /**
+     * Simulates or verifies the user's real-world follow-through action.
+     * Agreement alone makes Muse HOPEFUL; verified follow-through makes Muse RADIANT (healthy & happy).
+     */
+    fun completeDemoFollowThrough() {
+        val scenario = _activeDemoScenario.value
+        val curr = _tamagotchiState.value
+        val timeStr = currentTimeFormatted()
+
+        _demoRecoveryStage.value = DemoRecoveryStage.RECOVERED_HAPPY
+        _telemetrySnapshot.value = buildTelemetrySnapshot(scenario, isRecovered = true)
+
+        val (speechText, actionTitle, actionDetail) = when (scenario) {
+            MuseDemoScenario.SUCCESS_TRAP -> Triple(
+                "You logged a full 7.5 hours of sleep and locked in your weekend plans with friends! My glow is completely restored—that sounds like a life worth building! ✨",
+                "Verified Follow-Through: 11 PM Cutoff & Weekend Friends Plan",
+                "7.5h sleep restored • Calendar block set for close friends"
+            )
+            MuseDemoScenario.INVISIBLE_MONEY_LEAK -> Triple(
+                "You made your 5-minute easy dinner at home and took a relaxing evening off! The delivery cycle is broken and we're thriving together! ✨",
+                "Verified Follow-Through: 5-Min Easy Dinner & Evening Unwind",
+                "Skipped late-night delivery (+$34 saved) • Peaceful evening routine"
+            )
+            MuseDemoScenario.CONNECTION_DEBT -> Triple(
+                "You called your sibling and reconnected from the heart! My aura is bouncing with joy—you made room for the people who make life meaningful! 💖",
+                "Verified Follow-Through: 14-Min Call with Sibling Logged",
+                "Reconnected with sibling & sent warm birthday note to friend"
+            )
+            MuseDemoScenario.NONE -> Triple(
+                "Verified daily balance across all channels! Our bio-responsive harmony is in full bloom! ✨",
+                "Verified Daily Harmony",
+                "+25% Bio-Responsive Vitality"
+            )
+        }
+
+        _tamagotchiState.value = curr.copy(
+            hydration = 0.90f,
+            focus = 0.92f,
+            innerPeace = 0.91f,
+            physicalEnergy = 0.89f,
+            connection = 0.92f,
+            mood = TamagotchiMood.RADIANT,
+            speech = speechText,
+            xp = (curr.xp + 60).coerceAtMost(curr.xpForNextLevel),
+            recoveryStage = DemoRecoveryStage.RECOVERED_HAPPY
+        )
+
+        _vitalityCheckin.value = VitalityCheckin(
+            clarityScore = 94,
+            emotionalEquilibrium = 92,
+            restorativePeace = 91,
+            moodWord = "Radiant Equilibrium"
+        )
+
+        val newLog = CareActionLog(
+            id = UUID.randomUUID().toString(),
+            actionName = actionTitle,
+            detail = actionDetail,
+            timestamp = timeStr,
+            xpGained = 60
+        )
+        _careLogs.value = listOf(newLog) + _careLogs.value.take(15)
+
+        val followThroughMsg = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            isFromUser = false,
+            content = "🌟 **Follow-Through Verified:** $actionDetail\n\n$speechText",
+            timestamp = timeStr,
+            thoughtSteps = listOf(
+                ThoughtStep("Telemetry Verification", actionDetail),
+                ThoughtStep("Companion State Transition", "Transitioned from Hopeful → Healthy & Happy (Radiant)")
+            ),
+            suggestedPrompts = listOf(
+                "Try Demo 1: The Success Trap",
+                "Try Demo 2: The Invisible Money Leak",
+                "Try Demo 3: The Connection Debt"
+            ),
+            category = "Verified Follow-Through"
+        )
+        _messages.value = _messages.value + followThroughMsg
+    }
 
     fun toggleGoogleHealth() {
         val curr = _integrations.value
@@ -171,7 +455,6 @@ class SerenityRepository {
             lastSyncedAt = advice.timestamp
         )
 
-        // Automatically share Muse's life prescription into Dialogue chat
         val museMessage = ChatMessage(
             id = UUID.randomUUID().toString(),
             isFromUser = false,
@@ -350,7 +633,14 @@ class SerenityRepository {
             }
         }
 
-        val reevaluatedMood = evaluateMood(updatedState)
+        val reevaluatedMood = if (
+            _activeDemoScenario.value != MuseDemoScenario.NONE &&
+            _demoRecoveryStage.value != DemoRecoveryStage.RECOVERED_HAPPY
+        ) {
+            updatedState.mood
+        } else {
+            evaluateMood(updatedState)
+        }
 
         _tamagotchiState.value = updatedState.copy(
             level = newLevel,
@@ -472,6 +762,22 @@ class SerenityRepository {
     }
 
     fun sendMessage(userText: String) {
+        // Quick Demo Switchers from chat chips
+        when {
+            userText.contains("Try Demo 1", ignoreCase = true) -> {
+                activateDemoScenario(MuseDemoScenario.SUCCESS_TRAP)
+                return
+            }
+            userText.contains("Try Demo 2", ignoreCase = true) -> {
+                activateDemoScenario(MuseDemoScenario.INVISIBLE_MONEY_LEAK)
+                return
+            }
+            userText.contains("Try Demo 3", ignoreCase = true) -> {
+                activateDemoScenario(MuseDemoScenario.CONNECTION_DEBT)
+                return
+            }
+        }
+
         val currentTime = currentTimeFormatted()
         val userMsg = ChatMessage(
             id = UUID.randomUUID().toString(),
@@ -496,14 +802,206 @@ class SerenityRepository {
         val lower = input.lowercase()
         val timeStr = currentTimeFormatted()
         val id = UUID.randomUUID().toString()
-        val tamagotchi = _tamagotchiState.value
+        val scenario = _activeDemoScenario.value
+        val stage = _demoRecoveryStage.value
 
+        // 1. Handle Demo 1: The Success Trap scripted & natural dialogue
+        if (scenario == MuseDemoScenario.SUCCESS_TRAP) {
+            if (stage == DemoRecoveryStage.PROACTIVE_CONCERN ||
+                lower.contains("working hard") ||
+                lower.contains("better life later")
+            ) {
+                _demoRecoveryStage.value = DemoRecoveryStage.AWAITING_COMMITMENT
+                val replyText = "I understand. But what if the way you're building that future is taking too much away from your life today? You don't have to give up your ambition. Can we protect your sleep and put one important relationship back on your calendar?"
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    speech = replyText,
+                    recoveryStage = DemoRecoveryStage.AWAITING_COMMITMENT
+                )
+                return ChatMessage(
+                    id = id,
+                    isFromUser = false,
+                    content = replyText,
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("Ambition vs. Sustainability", "Validating long-term ambition while surfacing present-day burnout cost"),
+                        ThoughtStep("Actionable Proposal", "Proposing sleep boundary + restoring 1 close friend commitment")
+                    ),
+                    suggestedPrompts = listOf(
+                        "Okay. I'll stop working at midnight and see my friends this weekend."
+                    ),
+                    category = "The Success Trap • Coaching"
+                )
+            } else if (stage == DemoRecoveryStage.AWAITING_COMMITMENT ||
+                lower.contains("midnight") ||
+                lower.contains("friends this weekend") ||
+                lower.contains("okay")
+            ) {
+                _demoRecoveryStage.value = DemoRecoveryStage.HOPEFUL_COMMITTED
+                val replyText = "That sounds like a life worth building."
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    mood = TamagotchiMood.HOPEFUL,
+                    physicalEnergy = 0.62f,
+                    connection = 0.60f,
+                    innerPeace = 0.68f,
+                    speech = "$replyText (I'm feeling hopeful! Log your follow-through once you rest and reconnect.)",
+                    recoveryStage = DemoRecoveryStage.HOPEFUL_COMMITTED
+                )
+                return ChatMessage(
+                    id = id,
+                    isFromUser = false,
+                    content = replyText,
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("Commitment Registered", "User committed to midnight cutoff & weekend social plan"),
+                        ThoughtStep("State Transition → Hopeful", "Charm brightens and relaxes; awaiting verified follow-through to fully recover")
+                    ),
+                    suggestedPrompts = listOf(
+                        "How are you feeling now?",
+                        "Show my sleep & social data"
+                    ),
+                    category = "The Success Trap • Hopeful Commitment"
+                )
+            }
+        }
+
+        // 2. Handle Demo 2: The Invisible Money Leak scripted & natural dialogue
+        if (scenario == MuseDemoScenario.INVISIBLE_MONEY_LEAK) {
+            if (stage == DemoRecoveryStage.PROACTIVE_CONCERN ||
+                lower.contains("tired when i get home") ||
+                lower.contains("ordering food")
+            ) {
+                _demoRecoveryStage.value = DemoRecoveryStage.AWAITING_COMMITMENT
+                val replyText = "That makes sense. I don't think you need another lecture about budgeting. I think we should make your evenings easier. Let's plan a few meals that take five minutes, keep an easy dinner ready, and choose one evening activity you actually look forward to."
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    speech = replyText,
+                    recoveryStage = DemoRecoveryStage.AWAITING_COMMITMENT
+                )
+                return ChatMessage(
+                    id = id,
+                    isFromUser = false,
+                    content = replyText,
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("Root Cause Empathy", "Recognizing evening exhaustion rather than lecturing on budget totals"),
+                        ThoughtStep("Friction Reduction", "Designing 5-minute dinner prep + restorative evening activity")
+                    ),
+                    suggestedPrompts = listOf(
+                        "That would help. I'm tired of feeling like I can't save anything."
+                    ),
+                    category = "The Invisible Money Leak • Coaching"
+                )
+            } else if (stage == DemoRecoveryStage.AWAITING_COMMITMENT ||
+                lower.contains("that would help") ||
+                lower.contains("save anything") ||
+                lower.contains("okay")
+            ) {
+                _demoRecoveryStage.value = DemoRecoveryStage.HOPEFUL_COMMITTED
+                val replyText = "Then let's start by making tomorrow easier, not by asking you to become a completely different person overnight."
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    mood = TamagotchiMood.HOPEFUL,
+                    innerPeace = 0.66f,
+                    physicalEnergy = 0.64f,
+                    speech = "$replyText (I'm feeling hopeful! Verify your easy evening follow-through to complete recovery.)",
+                    recoveryStage = DemoRecoveryStage.HOPEFUL_COMMITTED
+                )
+                return ChatMessage(
+                    id = id,
+                    isFromUser = false,
+                    content = replyText,
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("Plan Accepted", "User accepted low-friction 5-minute evening meal plan"),
+                        ThoughtStep("State Transition → Hopeful", "Muse transitions from Sick to Hopeful; awaiting simulated follow-through")
+                    ),
+                    suggestedPrompts = listOf(
+                        "What 5-minute meals do you suggest?",
+                        "Check my evening spending pattern"
+                    ),
+                    category = "The Invisible Money Leak • Hopeful Commitment"
+                )
+            }
+        }
+
+        // 3. Handle Demo 3: The Connection Debt scripted & natural dialogue
+        if (scenario == MuseDemoScenario.CONNECTION_DEBT) {
+            if (lower.contains("other things to do") || lower.contains("get around to it")) {
+                _demoRecoveryStage.value = DemoRecoveryStage.AWAITING_COMMITMENT
+                val replyText = "You told me those relationships are important to you. I'm worried that 'later' keeps getting pushed further away. Is there a reason you've been avoiding those calls?"
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    speech = replyText,
+                    recoveryStage = DemoRecoveryStage.AWAITING_COMMITMENT
+                )
+                return ChatMessage(
+                    id = id,
+                    isFromUser = false,
+                    content = replyText,
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("Values Reflection", "Highlighting user's pinned core value: 'Family & Close Friends'"),
+                        ThoughtStep("Gentle Inquiry", "Exploring emotional friction behind postponing the call")
+                    ),
+                    suggestedPrompts = listOf(
+                        "Honestly, we haven't talked in so long that now it feels awkward. I don't know what to say."
+                    ),
+                    category = "The Connection Debt • Values Alignment"
+                )
+            } else if (lower.contains("awkward") || lower.contains("don't know what to say")) {
+                _demoRecoveryStage.value = DemoRecoveryStage.AWAITING_COMMITMENT
+                val replyText = "You don't need a perfect explanation. A simple 'I've missed talking to you. How have you been?' is enough to start. Want to set aside ten minutes today?"
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    speech = replyText,
+                    recoveryStage = DemoRecoveryStage.AWAITING_COMMITMENT
+                )
+                return ChatMessage(
+                    id = id,
+                    isFromUser = false,
+                    content = replyText,
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("De-escalating Awkwardness", "Providing a warm, low-pressure conversation opener"),
+                        ThoughtStep("Micro-Commitment", "Proposing a simple 10-minute window today")
+                    ),
+                    suggestedPrompts = listOf(
+                        "Okay. I'll call tonight."
+                    ),
+                    category = "The Connection Debt • Coaching"
+                )
+            } else if (lower.contains("call tonight") || lower.contains("okay")) {
+                _demoRecoveryStage.value = DemoRecoveryStage.HOPEFUL_COMMITTED
+                val replyText = "That makes me happy. You have room in your life for the people who make it meaningful, too."
+                _tamagotchiState.value = _tamagotchiState.value.copy(
+                    mood = TamagotchiMood.HOPEFUL,
+                    connection = 0.68f,
+                    innerPeace = 0.80f,
+                    speech = "$replyText (Record your planned call when done so we can celebrate together!)",
+                    recoveryStage = DemoRecoveryStage.HOPEFUL_COMMITTED
+                )
+                return ChatMessage(
+                    id = id,
+                    isFromUser = false,
+                    content = replyText,
+                    timestamp = timeStr,
+                    thoughtSteps = listOf(
+                        ThoughtStep("Planned Call Scheduled", "User committed to calling sibling tonight"),
+                        ThoughtStep("State Transition → Hopeful", "Charm brightens; ready to bounce happily once call is recorded")
+                    ),
+                    suggestedPrompts = listOf(
+                        "Remind me of the conversation opener",
+                        "How are you feeling now, Lumi?"
+                    ),
+                    category = "The Connection Debt • Hopeful Commitment"
+                )
+            }
+        }
+
+        // General conversational replies preserved
+        val tamagotchi = _tamagotchiState.value
         return when {
             lower.contains("how are you") || lower.contains("tamagotchi") || lower.contains("lumi") -> {
                 ChatMessage(
                     id = id,
                     isFromUser = false,
-                    content = "I reflect your life flow! Right now our Life Score is ${tamagotchi.overallLifeScore}%. My hydration is at ${(tamagotchi.hydration * 100).toInt()}%, and our inner peace is at ${(tamagotchi.innerPeace * 100).toInt()}%. Every healthy choice you make directly blooms in my aura! ✨",
+                    content = "I reflect your life flow! Right now our Life Score is ${tamagotchi.overallLifeScore}% and my mood is ${tamagotchi.mood.title}. My hydration is at ${(tamagotchi.hydration * 100).toInt()}%, and our inner peace is at ${(tamagotchi.innerPeace * 100).toInt()}%. Every healthy choice you make directly blooms in my aura! ✨",
                     timestamp = timeStr,
                     thoughtSteps = listOf(
                         ThoughtStep("Sensory Life Telemetry", "Synthesizing 5 core vital meters: Hydration, Focus, Peace, Energy, Connection"),
@@ -576,6 +1074,350 @@ class SerenityRepository {
         }
     }
 
+    private fun buildTelemetrySnapshot(
+        scenario: MuseDemoScenario,
+        isRecovered: Boolean
+    ): SyntheticTelemetrySnapshot {
+        return when (scenario) {
+            MuseDemoScenario.SUCCESS_TRAP -> SyntheticTelemetrySnapshot(
+                scenario = scenario,
+                deterministicTriggerActive = !isRecovered,
+                triggeredRuleExplanation = if (isRecovered) {
+                    "RESOLVED: 11 PM work cutoff honored (7.5h sleep) & weekend friend brunch scheduled."
+                } else {
+                    "RULE MATCH [Success Trap]: Tasks ≥ 95% AND Savings Δ ≥ +15% WHILE 14d Sleep Avg ≤ 5.2h AND Canceled Social Plans ≥ 3."
+                },
+                healthReport = ChannelTelemetryReport(
+                    channelName = "Health (Google Health)",
+                    headlineStatus = if (isRecovered) "7.5h Sleep Restored" else "Sleep Dropped 7.5h → 5.0h",
+                    summary = if (isRecovered) {
+                        "Logged 7.5 hours of restorative sleep after stopping work before midnight."
+                    } else {
+                        "Sleep dropped from 7.5 to 5.0 hours over two weeks; resting heart rate elevated +6 bpm."
+                    },
+                    scorePercent = if (isRecovered) 90 else 38,
+                    isAlert = !isRecovered,
+                    metrics = listOf(
+                        ChannelMetricItem("Avg Sleep (14d)", if (isRecovered) "7.5 hrs" else "5.0 hrs", if (isRecovered) "+2.5h recovery" else "-2.5h vs baseline", isWarning = !isRecovered),
+                        ChannelMetricItem("Bedtime Window", if (isRecovered) "11:00 PM" else "1:45 AM", if (isRecovered) "Protected" else "Late night work", isWarning = !isRecovered),
+                        ChannelMetricItem("Resting HR", if (isRecovered) "58 bpm" else "67 bpm", if (isRecovered) "Optimal" else "+9 bpm strain", isWarning = !isRecovered)
+                    ),
+                    historyLog = listOf(
+                        "Week 1 Avg: 7.4h sleep • Bedtime 10:45 PM",
+                        "Week 2 Avg: 5.0h sleep • Laptop active past 1:15 AM (6 nights)",
+                        if (isRecovered) "Last Night: 7.5h sleep logged (11:00 PM cutoff)" else "Last Night: 4.8h sleep (worked until 1:50 AM)"
+                    )
+                ),
+                tasksReport = ChannelTelemetryReport(
+                    channelName = "Tasks (Productivity)",
+                    headlineStatus = if (isRecovered) "95% Done • Healthy Boundary" else "98% Complete • Working Late Every Night",
+                    summary = if (isRecovered) {
+                        "High output maintained with an 11:00 PM shutdown ritual."
+                    } else {
+                        "98% of tasks completed; commits and task closures logged between 11:30 PM and 1:45 AM every night."
+                    },
+                    scorePercent = 98,
+                    isAlert = !isRecovered,
+                    metrics = listOf(
+                        ChannelMetricItem("Completion Rate", "98%", "49 of 50 tasks done", isWarning = false),
+                        ChannelMetricItem("After-Hours Work", if (isRecovered) "0 hrs" else "2.8 hrs/night", if (isRecovered) "Cutoff active" else "Past midnight", isWarning = !isRecovered),
+                        ChannelMetricItem("Deep Focus Blocks", "6.5 hrs/day", "Peak output", isWarning = false)
+                    ),
+                    historyLog = listOf(
+                        "Tue 12:40 AM: Closed 'Q4 Architecture Spec'",
+                        "Wed 1:15 AM: Closed 'Sprint Backlog Cleanup'",
+                        "Thu 12:55 AM: Closed 'Performance Audit'"
+                    )
+                ),
+                financeReport = ChannelTelemetryReport(
+                    channelName = "Finance (Mindful Budget)",
+                    headlineStatus = "Savings Increased +20%",
+                    summary = "Monthly savings rate rose 20% above target; zero impulse luxury purchases.",
+                    scorePercent = 96,
+                    isAlert = false,
+                    metrics = listOf(
+                        ChannelMetricItem("Savings Growth", "+20%", "+$840 vs last month", isWarning = false),
+                        ChannelMetricItem("Budget Adherence", "97%", "Under monthly cap", isWarning = false),
+                        ChannelMetricItem("Investment Auto-Transfer", "Active", "On schedule", isWarning = false)
+                    ),
+                    historyLog = listOf(
+                        "Auto-saved $1,400 to High-Yield Reserve (+20%)",
+                        "Discretionary spend 18% below monthly ceiling"
+                    )
+                ),
+                socialReport = ChannelTelemetryReport(
+                    channelName = "Social (Facebook & Calendar)",
+                    headlineStatus = if (isRecovered) "Weekend Friends Plan Restored" else "3 Canceled Plans • 0 Social Hours",
+                    summary = if (isRecovered) {
+                        "Confirmed Saturday brunch with close friends and protected Sunday afternoon."
+                    } else {
+                        "Three canceled plans with close friends in a row; zero meaningful social time logged this week."
+                    },
+                    scorePercent = if (isRecovered) 88 else 24,
+                    isAlert = !isRecovered,
+                    metrics = listOf(
+                        ChannelMetricItem("Canceled Plans", if (isRecovered) "1 Restored" else "3 in a row", if (isRecovered) "Saturday confirmed" else "3 weeks straight", isWarning = !isRecovered),
+                        ChannelMetricItem("Meaningful Social Time", if (isRecovered) "3.5 hrs planned" else "0 hrs", if (isRecovered) "On calendar" else "Down from 6h/wk", isWarning = !isRecovered),
+                        ChannelMetricItem("Close Friend Replies", if (isRecovered) "Caught up" else "4 unread threads", if (isRecovered) "Active" else "Delayed 5+ days", isWarning = !isRecovered)
+                    ),
+                    historyLog = listOf(
+                        "2 weeks ago: Canceled Friday dinner with Sam & Priya ('Need to finish deck')",
+                        "Last week: Canceled Sunday hike with Alex ('Catching up on deliverables')",
+                        if (isRecovered) "Today: Confirmed Saturday brunch with Sam, Priya & Alex" else "Yesterday: Declined board game night ('Working late')"
+                    )
+                ),
+                weeklySleepHours = if (isRecovered) {
+                    listOf(5.2f, 5.0f, 4.9f, 5.1f, 5.0f, 7.2f, 7.5f)
+                } else {
+                    listOf(7.4f, 6.8f, 6.1f, 5.5f, 5.2f, 4.9f, 5.0f)
+                }
+            )
+
+            MuseDemoScenario.INVISIBLE_MONEY_LEAK -> SyntheticTelemetrySnapshot(
+                scenario = scenario,
+                deterministicTriggerActive = !isRecovered,
+                triggeredRuleExplanation = if (isRecovered) {
+                    "RESOLVED: 5-minute easy dinner prepared at home; evening delivery loop broken."
+                } else {
+                    "RULE MATCH [Invisible Money Leak]: Sleep < 5.8h + High Evening Task Stress + Solitary Evenings → 9 Late-Night Food Delivery Orders ($284)."
+                },
+                healthReport = ChannelTelemetryReport(
+                    channelName = "Health (Google Health)",
+                    headlineStatus = if (isRecovered) "Evening Wind-Down Restored" else "Poor Sleep on 5 Consecutive Nights",
+                    summary = if (isRecovered) {
+                        "Earlier meal and screen-free wind-down improved sleep quality to 7.3h."
+                    } else {
+                        "Fragmented sleep (avg 5.4h) across 5 consecutive weeknights; high evening cortisol/stress."
+                    },
+                    scorePercent = if (isRecovered) 86 else 45,
+                    isAlert = !isRecovered,
+                    metrics = listOf(
+                        ChannelMetricItem("Consecutive Poor Nights", if (isRecovered) "0 (Reset)" else "5 nights", if (isRecovered) "7.3h last night" else "5.4h avg", isWarning = !isRecovered),
+                        ChannelMetricItem("Evening Energy", if (isRecovered) "Balanced" else "18% (Exhausted)", if (isRecovered) "Restored" else "Post-6PM crash", isWarning = !isRecovered),
+                        ChannelMetricItem("Late Meal Impact", if (isRecovered) "7:00 PM dinner" else "9:45 PM delivery", if (isRecovered) "Healthy digestion" else "Disrupts REM", isWarning = !isRecovered)
+                    ),
+                    historyLog = listOf(
+                        "Mon–Fri: Sleep efficiency dropped to 71% after 9:30 PM heavy takeout meals",
+                        if (isRecovered) "Tonight: 5-min home meal at 6:45 PM • Calm nervous system" else "Evening fatigue spike detected daily at 6:30 PM"
+                    )
+                ),
+                tasksReport = ChannelTelemetryReport(
+                    channelName = "Tasks (Productivity)",
+                    headlineStatus = if (isRecovered) "Tasks Done • Calm Evenings" else "Tasks Done, But Evenings Stressful",
+                    summary = if (isRecovered) {
+                        "Important tasks completed with a 5-minute dinner prep ritual queued for 6:30 PM."
+                    } else {
+                        "All important daytime tasks completed (92%), but cognitive exhaustion peaks at 6:00 PM."
+                    },
+                    scorePercent = 88,
+                    isAlert = !isRecovered,
+                    metrics = listOf(
+                        ChannelMetricItem("Important Tasks", "100% Done", "Daytime goals met", isWarning = false),
+                        ChannelMetricItem("6 PM Decision Fatigue", if (isRecovered) "Low (Pre-planned)" else "High (91%)", if (isRecovered) "5-min meal ready" else "Zero willpower left", isWarning = !isRecovered),
+                        ChannelMetricItem("Evening Unwind Activity", if (isRecovered) "Fiction reading" else "None scheduled", if (isRecovered) "Enjoyed 30m" else "Doomscrolling", isWarning = !isRecovered)
+                    ),
+                    historyLog = listOf(
+                        "6:15 PM pattern: Workday ends in high cognitive depletion",
+                        if (isRecovered) "Added 5-min easy meal checklist & evening book chapter" else "No easy dinner planned → defaults to delivery app"
+                    )
+                ),
+                financeReport = ChannelTelemetryReport(
+                    channelName = "Finance (Mindful Budget)",
+                    headlineStatus = if (isRecovered) "Delivery Loop Broken (+$34 Saved)" else "9 Convenience Orders • Savings Behind",
+                    summary = if (isRecovered) {
+                        "Skipped late-night delivery with a 5-minute home meal; savings goal back on track."
+                    } else {
+                        "No luxury purchases, but 9 small food-delivery & convenience orders ($284) pushed savings 18% behind goal."
+                    },
+                    scorePercent = if (isRecovered) 89 else 42,
+                    isAlert = !isRecovered,
+                    metrics = listOf(
+                        ChannelMetricItem("Evening Delivery Orders", if (isRecovered) "0 tonight" else "9 in 10 days", if (isRecovered) "-$34 saved today" else "$284 total leak", isWarning = !isRecovered),
+                        ChannelMetricItem("Avg Order Time", "8:45 PM – 10:15 PM", "Correlates with low sleep", isWarning = !isRecovered),
+                        ChannelMetricItem("Monthly Savings Goal", if (isRecovered) "Back on track" else "-18% behind", if (isRecovered) "Recovering" else "$240 shortfall", isWarning = !isRecovered)
+                    ),
+                    historyLog = listOf(
+                        "Tue 9:12 PM: $31.40 Delivery App (Solo evening, 5.2h sleep)",
+                        "Wed 8:55 PM: $28.90 Convenience Mart + Delivery Fees",
+                        "Thu 9:40 PM: $36.20 Late-Night Takeout",
+                        if (isRecovered) "Today 6:45 PM: $0 Delivery — 5-minute home dinner prepared!" else "Fri 9:20 PM: $33.80 Delivery App"
+                    )
+                ),
+                socialReport = ChannelTelemetryReport(
+                    channelName = "Social (Facebook & Calendar)",
+                    headlineStatus = if (isRecovered) "Restorative Evening Routine" else "Most Evenings Spent Alone at Home",
+                    summary = if (isRecovered) {
+                        "Replaced isolated stress-scrolling with a cozy evening activity you look forward to."
+                    } else {
+                        "6 of the last 7 evenings spent alone at home with no restorative activity or connection."
+                    },
+                    scorePercent = if (isRecovered) 84 else 48,
+                    isAlert = !isRecovered,
+                    metrics = listOf(
+                        ChannelMetricItem("Solo Evenings", if (isRecovered) "Intentional unwind" else "6 of 7 nights", if (isRecovered) "Restorative" else "Unstructured", isWarning = !isRecovered),
+                        ChannelMetricItem("Evening Mood", if (isRecovered) "Hopeful & Calm" else "Drained", "Correlates with spend", isWarning = !isRecovered)
+                    ),
+                    historyLog = listOf(
+                        "Pattern: Exhausted + Alone after 7 PM → 85% probability of convenience spending",
+                        if (isRecovered) "Tonight: Enjoyed evening unwind ritual after 5-min dinner" else "No evening ritual scheduled after work"
+                    )
+                ),
+                weeklySleepHours = if (isRecovered) {
+                    listOf(5.5f, 5.3f, 5.4f, 5.2f, 5.6f, 6.8f, 7.3f)
+                } else {
+                    listOf(6.9f, 5.6f, 5.4f, 5.2f, 5.3f, 5.5f, 5.4f)
+                }
+            )
+
+            MuseDemoScenario.CONNECTION_DEBT -> SyntheticTelemetrySnapshot(
+                scenario = scenario,
+                deterministicTriggerActive = !isRecovered,
+                triggeredRuleExplanation = if (isRecovered) {
+                    "RESOLVED: 14-minute sibling call completed & close friend reconnected."
+                } else {
+                    "RULE MATCH [Connection Debt]: Health/Tasks/Finance ≥ 90% WHILE Sibling Call Postponed 3x, Friend Birthday Missed, & Family Visit Rescheduled 2x."
+                },
+                healthReport = ChannelTelemetryReport(
+                    channelName = "Health (Google Health)",
+                    headlineStatus = "Good Sleep (7.8h) & Exercise",
+                    summary = "Physically healthy and consistent: 7.8h average sleep, 9,200 daily steps, and 4 workouts this week.",
+                    scorePercent = 94,
+                    isAlert = false,
+                    metrics = listOf(
+                        ChannelMetricItem("Avg Sleep", "7.8 hrs", "Consistent 10:30 PM", isWarning = false),
+                        ChannelMetricItem("Daily Steps", "9,240 steps", "+15% above goal", isWarning = false),
+                        ChannelMetricItem("Workouts", "4 sessions/wk", "Strength & cardio", isWarning = false)
+                    ),
+                    historyLog = listOf(
+                        "All 7 days: 7.5h+ sleep and morning sunlight walk completed",
+                        "Cardio & recovery metrics in top 10% baseline"
+                    )
+                ),
+                tasksReport = ChannelTelemetryReport(
+                    channelName = "Tasks (Productivity)",
+                    headlineStatus = "100% Tasks Completed",
+                    summary = "All work and personal admin tasks completed on schedule without late-night spillover.",
+                    scorePercent = 96,
+                    isAlert = false,
+                    metrics = listOf(
+                        ChannelMetricItem("Task Completion", "100%", "All work items done", isWarning = false),
+                        ChannelMetricItem("Deferred Personal Item", if (isRecovered) "Completed!" else "'Call Sibling' (3x)", if (isRecovered) "Called tonight" else "Snoozed 3 times", isWarning = !isRecovered)
+                    ),
+                    historyLog = listOf(
+                        "Work inbox zero achieved 4 days in a row",
+                        if (isRecovered) "Completed task: 'Call sibling to catch up' (14 mins)" else "Task 'Call sibling' snoozed on Sun, Tue, and Thu"
+                    )
+                ),
+                financeReport = ChannelTelemetryReport(
+                    channelName = "Finance (Mindful Budget)",
+                    headlineStatus = "Budget On Track • Savings Growing",
+                    summary = "Monthly budget is balanced and automatic savings transfers are growing steadily.",
+                    scorePercent = 93,
+                    isAlert = false,
+                    metrics = listOf(
+                        ChannelMetricItem("Monthly Budget", "On Track", "94% adherence", isWarning = false),
+                        ChannelMetricItem("Savings Trend", "+12% growth", "Steady reserve", isWarning = false)
+                    ),
+                    historyLog = listOf(
+                        "Zero unplanned overdrafts or impulse spikes this month",
+                        "Emergency & travel funds growing on schedule"
+                    )
+                ),
+                socialReport = ChannelTelemetryReport(
+                    channelName = "Social (Facebook & Relationships)",
+                    headlineStatus = if (isRecovered) "Sibling Call Logged • Reconnected!" else "Sibling Call Postponed 3x • Missed Birthday",
+                    summary = if (isRecovered) {
+                        "Completed a warm 14-minute call with your sibling and sent a heartfelt message to your close friend."
+                    } else {
+                        "Repeatedly postponed calling your sibling (3x), missed a close friend's birthday, and rescheduled family visit twice."
+                    },
+                    scorePercent = if (isRecovered) 92 else 22,
+                    isAlert = !isRecovered,
+                    metrics = listOf(
+                        ChannelMetricItem("Sibling Call", if (isRecovered) "14m Call Logged" else "Postponed 3x", if (isRecovered) "Connected tonight" else "26 days since last talk", isWarning = !isRecovered),
+                        ChannelMetricItem("Close Friend Birthday", if (isRecovered) "Voice note sent" else "Missed (3d ago)", if (isRecovered) "Reconnected" else "No message sent", isWarning = !isRecovered),
+                        ChannelMetricItem("Family Visit", if (isRecovered) "Confirmed next wk" else "Rescheduled 2x", if (isRecovered) "On calendar" else "Pushed out again", isWarning = !isRecovered)
+                    ),
+                    historyLog = listOf(
+                        "Core Value Pinned: 'Family and close friends come first'",
+                        "Oct 18 & Oct 22: Rescheduled weekend family visit twice",
+                        "Oct 25: Missed close friend Jordan's birthday reminder",
+                        if (isRecovered) "Tonight: 14-minute call with sibling ('I've missed talking to you!')" else "Sun / Tue / Thu: Postponed 'Call sibling' reminder 3 times"
+                    )
+                ),
+                weeklySleepHours = listOf(7.7f, 7.8f, 7.6f, 7.9f, 7.8f, 8.0f, 7.8f)
+            )
+
+            MuseDemoScenario.NONE -> SyntheticTelemetrySnapshot(
+                scenario = scenario,
+                deterministicTriggerActive = false,
+                triggeredRuleExplanation = "All 4 bio-responsive telemetry channels are in harmonic equilibrium.",
+                healthReport = ChannelTelemetryReport(
+                    channelName = "Health (Google Health)",
+                    headlineStatus = "7.4h Sleep • 7,840 Steps",
+                    summary = "Restorative sleep and daily movement are keeping Lumi's physical vitality radiant.",
+                    scorePercent = 88,
+                    isAlert = false,
+                    metrics = listOf(
+                        ChannelMetricItem("Sleep Duration", "7.4 hrs", "Consistent rhythm", isWarning = false),
+                        ChannelMetricItem("Daily Steps", "7,840 steps", "Active flow", isWarning = false),
+                        ChannelMetricItem("Hydration", "1.8L water", "85% cellular goal", isWarning = false)
+                    ),
+                    historyLog = listOf(
+                        "Morning walk and hydration logged on schedule",
+                        "Autonomic nervous system recovery at 88%"
+                    )
+                ),
+                tasksReport = ChannelTelemetryReport(
+                    channelName = "Tasks (Productivity)",
+                    headlineStatus = "4 of 5 Focus Tasks Done",
+                    summary = "Mindful single-tasking sprints completed without evening burnout.",
+                    scorePercent = 90,
+                    isAlert = false,
+                    metrics = listOf(
+                        ChannelMetricItem("Focus Tasks", "4 / 5 Done", "+20% Flow", isWarning = false),
+                        ChannelMetricItem("Evening Cutoff", "6:00 PM", "Protected rest", isWarning = false)
+                    ),
+                    historyLog = listOf(
+                        "Completed 45-min deep focus sprint at 10:30 AM",
+                        " afternoon priorities aligned with energy curve"
+                    )
+                ),
+                financeReport = ChannelTelemetryReport(
+                    channelName = "Finance (Mindful Budget)",
+                    headlineStatus = "Mindful Budget On Track",
+                    summary = "Daily spending and savings goals are aligned with your intentional living plan.",
+                    scorePercent = 89,
+                    isAlert = false,
+                    metrics = listOf(
+                        ChannelMetricItem("Daily Budget", "On Track", "+15% Peace of Mind", isWarning = false),
+                        ChannelMetricItem("Savings Rate", "+14%", "Steady progress", isWarning = false)
+                    ),
+                    historyLog = listOf(
+                        "No unplanned stress purchases detected this week",
+                        "Monthly savings automatic transfer complete"
+                    )
+                ),
+                socialReport = ChannelTelemetryReport(
+                    channelName = "Social (Facebook & Circles)",
+                    headlineStatus = "4 Meaningful Connections",
+                    summary = "Warm check-ins with close friends and family are nourishing your connection aura.",
+                    scorePercent = 86,
+                    isAlert = false,
+                    metrics = listOf(
+                        ChannelMetricItem("Friend Check-ins", "4 this week", "Warm resonance", isWarning = false),
+                        ChannelMetricItem("Family Calls", "Up to date", "Connected Sunday", isWarning = false)
+                    ),
+                    historyLog = listOf(
+                        "Shared coffee walk with close friend on Wednesday",
+                        "Called family on Sunday afternoon"
+                    )
+                ),
+                weeklySleepHours = listOf(7.3f, 7.5f, 7.4f, 7.8f, 7.2f, 7.6f, 7.4f)
+            )
+        }
+    }
+
     private fun initialCareLogs(): List<CareActionLog> = listOf(
         CareActionLog("c1", "Morning Hydration", "+18% Hydration", "8:15 AM", 20),
         CareActionLog("c2", "Sunlight & Fresh Air Walk", "+20% Physical Energy", "8:45 AM", 30),
@@ -594,19 +1436,19 @@ class SerenityRepository {
         ChatMessage(
             id = "m1",
             isFromUser = false,
-            content = "Hello, Maya! I am Lumi, your life companion spirit. My vitality, aura glow, and joy directly reflect how well you are treating yourself today. Right now our Life Score is 83%—we are radiant!",
+            content = "Hello, Maya! I am Lumi, your bio-responsive life companion. My vitality, aura glow, and mood directly respond to your Health, Tasks, Finance, and Social patterns. Select any of the 3 MuseLife Demos above to see how I detect hidden life conflicts and initiate a conversation!",
             timestamp = "9:00 AM",
             thoughtSteps = listOf(
                 ThoughtStep("Tamagotchi Life Sync", "Reading current life balance: 83% harmonious"),
-                ThoughtStep("Aura Calibration", "Rendering Stage 3 Luminous Luminary with warm coral bloom"),
-                ThoughtStep("Presence Readiness", "Attuned to Mindful Companion state")
+                ThoughtStep("Deterministic Rules Engine", "Monitoring Health, Tasks, Finance, and Social telemetry streams"),
+                ThoughtStep("Presence Readiness", "Attuned to Bio-Responsive Companion state")
             ),
             suggestedPrompts = listOf(
-                "How can I nurture you right now?",
-                "Let's review our life vitals",
-                "Take a 3-minute mindful pause"
+                "Try Demo 1: The Success Trap",
+                "Try Demo 2: The Invisible Money Leak",
+                "Try Demo 3: The Connection Debt"
             ),
-            category = "Life Tamagotchi Attunement"
+            category = "Bio-Responsive Companion"
         ),
         ChatMessage(
             id = "m2",
@@ -627,13 +1469,21 @@ class SerenityRepository {
             suggestedPrompts = listOf(
                 "Log a water break for Lumi",
                 "Define my single focal task",
-                "Start a quiet focus timer"
+                "Take a 3-minute mindful pause"
             ),
             category = "Cognitive Protection"
         )
     )
 
     private fun initialMemories(): List<MemoryItem> = listOf(
+        MemoryItem(
+            id = "v0",
+            title = "Family & Close Friends First",
+            content = "My relationships with my sibling, family, and close friends are what make my life meaningful—never let busyness push them to 'later'.",
+            category = "Values",
+            date = "Pinned Core Value",
+            isPinned = true
+        ),
         MemoryItem(
             id = "v1",
             title = "Unforced Effortlessness",
