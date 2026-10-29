@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,14 +23,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.SelfImprovement
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -56,11 +68,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.ChannelTelemetryReport
+import com.example.model.MemoryItem
+import com.example.model.MuseDemoScenario
+import com.example.model.ScreenNav
 import com.example.ui.components.SerenityCard
+import com.example.ui.components.SerenityPillChip
 import com.example.ui.components.SerenityPrimaryButton
+import com.example.ui.components.SerenitySecondaryButton
 import com.example.ui.components.SerenityStatusChip
 import com.example.ui.theme.AmberTertiary
 import com.example.ui.theme.BaseCanvas
+import com.example.ui.theme.CoralHoverGlow
 import com.example.ui.theme.CoralPrimary
 import com.example.ui.theme.DarkSageText
 import com.example.ui.theme.DeepEspresso
@@ -69,6 +88,8 @@ import com.example.ui.theme.MintContainer
 import com.example.ui.theme.MintSecondary
 import com.example.ui.theme.RecessedContainer
 import com.example.ui.theme.SageAccent
+import com.example.ui.theme.SerenityError
+import com.example.ui.theme.SerenityErrorContainer
 import com.example.ui.theme.SubtleContainer
 import com.example.ui.theme.WarmBorder
 import com.example.ui.theme.WarmSlateCharcoal
@@ -81,11 +102,26 @@ fun VitalityScreen(
     modifier: Modifier = Modifier
 ) {
     val checkin by viewModel.vitalityCheckin.collectAsState()
+    val activeScenario by viewModel.activeDemoScenario.collectAsState()
+    val telemetry by viewModel.telemetrySnapshot.collectAsState()
+    val memories by viewModel.memories.collectAsState()
+    val selectedCategory by viewModel.selectedMemoryCategory.collectAsState()
 
-    var claritySlider by remember { mutableFloatStateOf(checkin.clarityScore.toFloat()) }
-    var emotionalSlider by remember { mutableFloatStateOf(checkin.emotionalEquilibrium.toFloat()) }
-    var selectedMood by remember { mutableStateOf(checkin.moodWord) }
+    var claritySlider by remember(checkin.clarityScore) { mutableFloatStateOf(checkin.clarityScore.toFloat()) }
+    var emotionalSlider by remember(checkin.emotionalEquilibrium) { mutableFloatStateOf(checkin.emotionalEquilibrium.toFloat()) }
+    var selectedMood by remember(checkin.moodWord) { mutableStateOf(checkin.moodWord) }
     var showCheckinSuccess by remember { mutableStateOf(false) }
+
+    var showAddModal by remember { mutableStateOf(false) }
+    var newTitle by remember { mutableStateOf("") }
+    var newContent by remember { mutableStateOf("") }
+    var newCategory by remember { mutableStateOf("Values") }
+
+    val filteredMemories = if (selectedCategory == "All") {
+        memories
+    } else {
+        memories.filter { it.category == selectedCategory }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -98,25 +134,29 @@ fun VitalityScreen(
             start = 20.dp,
             end = 20.dp
         ),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        // Header
+        // 1. Header
         item {
             Column(modifier = Modifier.fillMaxWidth()) {
                 SerenityStatusChip(
-                    text = "Cognitive Synthesis & Balance",
-                    pulseColor = MintSecondary
+                    text = if (telemetry.deterministicTriggerActive) {
+                        "Anomaly Detected • ${activeScenario.title}"
+                    } else {
+                        "4-Channel Bio-Responsive Telemetry"
+                    },
+                    pulseColor = if (telemetry.deterministicTriggerActive) SerenityError else MintSecondary
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Equilibrium & Vitality",
+                    text = "Show Data",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
                         color = DeepEspresso
                     )
                 )
                 Text(
-                    text = "Longitudinal cognitive synthesis and restorative patterns.",
+                    text = "Synthetic & live telemetry across Health, Tasks, Finance, Social, and Core Values.",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = WarmSlateCharcoal
                     )
@@ -124,7 +164,120 @@ fun VitalityScreen(
             }
         }
 
-        // Metrics Overview: 3 Pillar Cards
+        // 2. Pump Synthetic Data Switcher (Switch between the 3 MuseLife Demos right on Data tab)
+        item {
+            SerenityCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Pump Synthetic Telemetry Dataset",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = DeepEspresso
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val scenarios = listOf(
+                            MuseDemoScenario.SUCCESS_TRAP,
+                            MuseDemoScenario.INVISIBLE_MONEY_LEAK,
+                            MuseDemoScenario.CONNECTION_DEBT,
+                            MuseDemoScenario.NONE
+                        )
+                        items(scenarios) { scenario ->
+                            val isSelected = activeScenario == scenario
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isSelected) CoralPrimary else SubtleContainer,
+                                modifier = Modifier
+                                    .border(1.dp, if (isSelected) CoralPrimary else WarmBorder, CircleShape)
+                                    .clip(CircleShape)
+                                    .clickable { viewModel.activateDemoScenario(scenario) }
+                            ) {
+                                Text(
+                                    text = scenario.title,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        color = if (isSelected) Color.White else DeepEspresso,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (telemetry.deterministicTriggerActive) SerenityErrorContainer else MintContainer)
+                            .padding(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (telemetry.deterministicTriggerActive) Icons.Default.Warning else Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = if (telemetry.deterministicTriggerActive) SerenityError else DarkSageText,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = telemetry.triggeredRuleExplanation,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (telemetry.deterministicTriggerActive) SerenityError else DarkSageText,
+                                    fontWeight = FontWeight.Bold,
+                                    lineHeight = 16.sp
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. The 4 Multi-Channel Data Cards (Health, Tasks, Finance, Social)
+        item {
+            ChannelDataCard(
+                report = telemetry.healthReport,
+                icon = Icons.Default.Favorite,
+                accentColor = MintSecondary,
+                testTag = "data_channel_health"
+            )
+        }
+
+        item {
+            ChannelDataCard(
+                report = telemetry.tasksReport,
+                icon = Icons.Default.TaskAlt,
+                accentColor = SageAccent,
+                testTag = "data_channel_tasks"
+            )
+        }
+
+        item {
+            ChannelDataCard(
+                report = telemetry.financeReport,
+                icon = Icons.Default.AccountBalance,
+                accentColor = AmberTertiary,
+                testTag = "data_channel_finance"
+            )
+        }
+
+        item {
+            ChannelDataCard(
+                report = telemetry.socialReport,
+                icon = Icons.Default.Groups,
+                accentColor = CoralPrimary,
+                testTag = "data_channel_social"
+            )
+        }
+
+        // 4. Metrics Overview: 3 Pillar Cards
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -133,7 +286,7 @@ fun VitalityScreen(
                 VitalityMetricCard(
                     title = "Clarity",
                     value = "${checkin.clarityScore}%",
-                    status = "Peak Focus",
+                    status = "Cognitive",
                     icon = Icons.Default.Psychology,
                     accentColor = CoralPrimary,
                     modifier = Modifier.weight(1f)
@@ -141,7 +294,7 @@ fun VitalityScreen(
                 VitalityMetricCard(
                     title = "Equilibrium",
                     value = "${checkin.emotionalEquilibrium}%",
-                    status = "Harmonious",
+                    status = "Balance",
                     icon = Icons.Default.SelfImprovement,
                     accentColor = SageAccent,
                     modifier = Modifier.weight(1f)
@@ -149,7 +302,7 @@ fun VitalityScreen(
                 VitalityMetricCard(
                     title = "Peace",
                     value = "${checkin.restorativePeace}%",
-                    status = "Attuned",
+                    status = "Restorative",
                     icon = Icons.Default.WbSunny,
                     accentColor = AmberTertiary,
                     modifier = Modifier.weight(1f)
@@ -157,7 +310,7 @@ fun VitalityScreen(
             }
         }
 
-        // Weekly Equilibrium Wave (Custom Canvas)
+        // 5. Weekly Sleep & Resonance Wave (Custom Canvas reflecting active scenario)
         item {
             SerenityCard(
                 modifier = Modifier
@@ -176,14 +329,14 @@ fun VitalityScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Weekly Resonance Wave",
+                                text = "Weekly Sleep & Resonance Trend",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = DeepEspresso
                                 )
                             )
                             Text(
-                                text = "Consistency: +14% compared to last cycle",
+                                text = "Hours of sleep across last 7 days (${telemetry.weeklySleepHours.last()}h latest)",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = SageAccent,
                                     fontWeight = FontWeight.SemiBold
@@ -192,7 +345,7 @@ fun VitalityScreen(
                         }
 
                         Icon(
-                            imageVector = Icons.Default.TrendingUp,
+                            imageVector = Icons.AutoMirrored.Filled.TrendingUp,
                             contentDescription = null,
                             tint = CoralPrimary,
                             modifier = Modifier.size(24.dp)
@@ -201,11 +354,11 @@ fun VitalityScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Canvas Wave
                     EquilibriumWaveCanvas(
+                        sleepHours = telemetry.weeklySleepHours,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(130.dp)
+                            .height(120.dp)
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -214,21 +367,33 @@ fun VitalityScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").forEach { day ->
-                            Text(
-                                text = day,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = if (day == "Thu") CoralPrimary else WarmSlateCharcoal,
-                                    fontWeight = if (day == "Thu") FontWeight.Bold else FontWeight.Medium
+                        val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+                        days.forEachIndexed { idx, day ->
+                            val hrs = telemetry.weeklySleepHours.getOrElse(idx) { 7.0f }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = day,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = WarmSlateCharcoal,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 )
-                            )
+                                Text(
+                                    text = "${hrs}h",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = if (hrs < 6.0f) SerenityError else CoralPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Daily Mindful Check-in Module
+        // 6. Daily Mindful Check-in Module
         item {
             SerenityCard(
                 modifier = Modifier
@@ -248,7 +413,7 @@ fun VitalityScreen(
                         )
                     )
                     Text(
-                        text = "Serenity adjusts response cadence and tone based on your state.",
+                        text = "Manual check-in updates cognitive clarity and emotional equilibrium.",
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = WarmSlateCharcoal
                         )
@@ -256,7 +421,6 @@ fun VitalityScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Clarity Slider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -279,7 +443,7 @@ fun VitalityScreen(
                     Slider(
                         value = claritySlider,
                         onValueChange = { claritySlider = it },
-                        valueRange = 50f..100f,
+                        valueRange = 30f..100f,
                         colors = SliderDefaults.colors(
                             thumbColor = CoralPrimary,
                             activeTrackColor = CoralPrimary,
@@ -290,7 +454,6 @@ fun VitalityScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Emotional Equilibrium Slider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -313,7 +476,7 @@ fun VitalityScreen(
                     Slider(
                         value = emotionalSlider,
                         onValueChange = { emotionalSlider = it },
-                        valueRange = 50f..100f,
+                        valueRange = 30f..100f,
                         colors = SliderDefaults.colors(
                             thumbColor = SageAccent,
                             activeTrackColor = SageAccent,
@@ -323,15 +486,6 @@ fun VitalityScreen(
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Felt Resonance",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color = DeepEspresso,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
 
                     val moods = listOf(
                         "Radiant Equilibrium",
@@ -364,7 +518,7 @@ fun VitalityScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     if (showCheckinSuccess) {
                         Row(
@@ -383,7 +537,7 @@ fun VitalityScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Resonance attuned. Serenity calibrated to $selectedMood.",
+                                text = "Resonance attuned. Calibrated to $selectedMood.",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     color = DarkSageText,
                                     fontWeight = FontWeight.SemiBold
@@ -410,33 +564,330 @@ fun VitalityScreen(
             }
         }
 
-        // Synthesized Patterns
+        // 7. Stated Values & Memory Vault Section (Used by Demo 3 Connection Debt to detect values-vs-behavior gap)
         item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Stated Values & Mind Vault",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = DeepEspresso
+                        )
+                    )
+                    Text(
+                        text = "Muse compares your pinned values against your real telemetry.",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = WarmSlateCharcoal
+                        )
+                    )
+                }
+                IconButton(
+                    onClick = { showAddModal = !showAddModal },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .shadow(4.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(CoralPrimary)
+                        .testTag("add_memory_button")
+                ) {
+                    Icon(
+                        imageVector = if (showAddModal) Icons.Default.Close else Icons.Default.Add,
+                        contentDescription = "Add intention or value",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        item {
+            AnimatedVisibility(visible = showAddModal) {
+                SerenityCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("new_memory_form_card")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp)
+                    ) {
+                        Text(
+                            text = "Log Core Value or Intention",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = DeepEspresso
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(listOf("Values", "Intentions", "Projects", "Reflections")) { cat ->
+                                SerenityPillChip(
+                                    text = cat,
+                                    isSelected = newCategory == cat,
+                                    onClick = { newCategory = cat }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = newTitle,
+                            onValueChange = { newTitle = it },
+                            label = { Text("Title / Core Value") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("memory_title_input"),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CoralHoverGlow,
+                                unfocusedBorderColor = WarmBorder,
+                                focusedContainerColor = FloatingSurface,
+                                unfocusedContainerColor = SubtleContainer
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = newContent,
+                            onValueChange = { newContent = it },
+                            label = { Text("Detail") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("memory_content_input"),
+                            shape = RoundedCornerShape(16.dp),
+                            minLines = 2,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CoralHoverGlow,
+                                unfocusedBorderColor = WarmBorder,
+                                focusedContainerColor = FloatingSurface,
+                                unfocusedContainerColor = SubtleContainer
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            SerenityPrimaryButton(
+                                text = "Preserve Value",
+                                onClick = {
+                                    if (newTitle.isNotBlank()) {
+                                        viewModel.addMemory(
+                                            title = newTitle.trim(),
+                                            content = newContent.trim().ifEmpty { newTitle.trim() },
+                                            category = newCategory,
+                                            isPinned = true
+                                        )
+                                        newTitle = ""
+                                        newContent = ""
+                                        showAddModal = false
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                testTag = "save_memory_button"
+                            )
+                            SerenitySecondaryButton(
+                                text = "Cancel",
+                                onClick = { showAddModal = false },
+                                modifier = Modifier.weight(0.6f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(listOf("All", "Values", "Projects", "Intentions", "Reflections")) { category ->
+                    SerenityPillChip(
+                        text = category,
+                        isSelected = selectedCategory == category,
+                        onClick = { viewModel.setMemoryCategory(category) }
+                    )
+                }
+            }
+        }
+
+        items(filteredMemories, key = { it.id }) { item ->
+            DataVaultMemoryCard(
+                memory = item,
+                onTogglePin = { viewModel.toggleMemoryPin(item.id) },
+                onReflect = {
+                    viewModel.sendQuickPrompt("Reflect with me on my stored value: '${item.title}' - ${item.content}")
+                    viewModel.navigateTo(ScreenNav.HOME)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelDataCard(
+    report: ChannelTelemetryReport,
+    icon: ImageVector,
+    accentColor: Color,
+    testTag: String
+) {
+    SerenityCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (report.isAlert) SerenityErrorContainer else accentColor.copy(alpha = 0.14f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = if (report.isAlert) SerenityError else accentColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = report.channelName,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = DeepEspresso
+                            )
+                        )
+                        Text(
+                            text = report.headlineStatus,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                color = if (report.isAlert) SerenityError else DarkSageText,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    color = if (report.isAlert) SerenityErrorContainer else MintContainer
+                ) {
+                    Text(
+                        text = "${report.scorePercent}%",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = if (report.isAlert) SerenityError else DarkSageText,
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             Text(
-                text = "Synthesized Behavioral Insights",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = DeepEspresso
+                text = report.summary,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = WarmSlateCharcoal,
+                    lineHeight = 19.sp
                 )
             )
-        }
 
-        item {
-            PatternCard(
-                title = "Circadian Synthesis Alignment",
-                description = "Your cognitive synthesis speed is highest during morning natural light exposure (9:00 AM – 11:30 AM).",
-                pillText = "Deep Focus Window",
-                accentColor = CoralPrimary
-            )
-        }
+            Spacer(modifier = Modifier.height(12.dp))
 
-        item {
-            PatternCard(
-                title = "Restorative Breath Impact",
-                description = "Taking 3-minute mindful resets reduces afternoon cognitive fragmentation by 32%.",
-                pillText = "Vitality Spark",
-                accentColor = SageAccent
-            )
+            // Metrics Grid Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                report.metrics.forEach { metric ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (metric.isWarning) SerenityErrorContainer.copy(alpha = 0.55f) else SubtleContainer)
+                            .border(
+                                1.dp,
+                                if (metric.isWarning) SerenityError.copy(alpha = 0.35f) else WarmBorder,
+                                RoundedCornerShape(14.dp)
+                            )
+                            .padding(10.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = metric.label,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = WarmSlateCharcoal,
+                                    fontSize = 10.sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = metric.value,
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (metric.isWarning) SerenityError else DeepEspresso
+                                )
+                            )
+                            Text(
+                                text = metric.trend,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (metric.isWarning) SerenityError else SageAccent,
+                                    fontSize = 10.sp
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (report.historyLog.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(RecessedContainer)
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    report.historyLog.forEach { entry ->
+                        Text(
+                            text = "• $entry",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = DeepEspresso,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -509,21 +960,21 @@ private fun VitalityMetricCard(
 }
 
 @Composable
-private fun EquilibriumWaveCanvas(modifier: Modifier = Modifier) {
+private fun EquilibriumWaveCanvas(
+    sleepHours: List<Float>,
+    modifier: Modifier = Modifier
+) {
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
+        val safeHours = if (sleepHours.size >= 2) sleepHours else listOf(7f, 7f, 7f, 7f, 7f, 7f, 7f)
 
-        // Data points representing weekly scores (Mon-Sun)
-        val points = listOf(
-            Offset(0f, height * 0.65f),
-            Offset(width * 0.16f, height * 0.45f),
-            Offset(width * 0.33f, height * 0.55f),
-            Offset(width * 0.50f, height * 0.25f), // Thu peak
-            Offset(width * 0.66f, height * 0.40f),
-            Offset(width * 0.83f, height * 0.30f),
-            Offset(width, height * 0.35f)
-        )
+        val points = safeHours.mapIndexed { idx, hrs ->
+            val x = width * (idx.toFloat() / (safeHours.size - 1).coerceAtLeast(1))
+            val normalized = ((hrs - 4.0f) / 5.0f).coerceIn(0.05f, 0.95f)
+            val y = height * (1f - normalized)
+            Offset(x, y)
+        }
 
         val path = Path()
         path.moveTo(points.first().x, points.first().y)
@@ -534,7 +985,6 @@ private fun EquilibriumWaveCanvas(modifier: Modifier = Modifier) {
             path.cubicTo(midX, p0.y, midX, p1.y, p1.x, p1.y)
         }
 
-        // Fill under path with subtle coral/mint gradient
         val fillPath = Path()
         fillPath.addPath(path)
         fillPath.lineTo(width, height)
@@ -552,7 +1002,6 @@ private fun EquilibriumWaveCanvas(modifier: Modifier = Modifier) {
             )
         )
 
-        // Draw the glowing line
         drawPath(
             path = path,
             brush = Brush.horizontalGradient(
@@ -561,17 +1010,17 @@ private fun EquilibriumWaveCanvas(modifier: Modifier = Modifier) {
             style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
         )
 
-        // Draw points with glowing halo
         points.forEachIndexed { index, point ->
-            val isPeak = index == 3
+            val hrs = safeHours[index]
+            val isLow = hrs < 6.0f
             drawCircle(
-                color = if (isPeak) CoralPrimary.copy(alpha = 0.35f) else MintSecondary.copy(alpha = 0.2f),
-                radius = if (isPeak) 10.dp.toPx() else 6.dp.toPx(),
+                color = if (isLow) SerenityError.copy(alpha = 0.35f) else CoralPrimary.copy(alpha = 0.28f),
+                radius = 7.dp.toPx(),
                 center = point
             )
             drawCircle(
-                color = if (isPeak) CoralPrimary else FloatingSurface,
-                radius = if (isPeak) 5.dp.toPx() else 3.5.dp.toPx(),
+                color = if (isLow) SerenityError else CoralPrimary,
+                radius = 4.dp.toPx(),
                 center = point
             )
         }
@@ -579,47 +1028,113 @@ private fun EquilibriumWaveCanvas(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun PatternCard(
-    title: String,
-    description: String,
-    pillText: String,
-    accentColor: Color
+private fun DataVaultMemoryCard(
+    memory: MemoryItem,
+    onTogglePin: () -> Unit,
+    onReflect: () -> Unit
 ) {
-    SerenityCard(modifier = Modifier.fillMaxWidth()) {
+    val categoryColor = when (memory.category) {
+        "Values" -> CoralPrimary
+        "Projects" -> SageAccent
+        "Intentions" -> AmberTertiary
+        else -> DeepEspresso
+    }
+
+    SerenityCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("memory_item_card")
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp)
+                .padding(16.dp)
         ) {
-            Surface(
-                shape = CircleShape,
-                color = accentColor.copy(alpha = 0.12f)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = pillText,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = accentColor,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                )
+                Surface(
+                    shape = CircleShape,
+                    color = categoryColor.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = memory.category,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = categoryColor,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = memory.date,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = WarmSlateCharcoal
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = onTogglePin,
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (memory.isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = if (memory.isPinned) "Unpin" else "Pin",
+                            tint = if (memory.isPinned) CoralPrimary else WarmSlateCharcoal,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+
+            Spacer(modifier = Modifier.height(6.dp))
+
             Text(
-                text = title,
+                text = memory.title,
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
                     color = DeepEspresso
                 )
             )
-            Spacer(modifier = Modifier.height(6.dp))
+
+            Spacer(modifier = Modifier.height(4.dp))
+
             Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium.copy(
+                text = memory.content,
+                style = MaterialTheme.typography.bodySmall.copy(
                     color = WarmSlateCharcoal,
-                    lineHeight = 22.sp
+                    lineHeight = 19.sp
                 )
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable(onClick = onReflect)
+                    .padding(vertical = 4.dp, horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Psychology,
+                    contentDescription = null,
+                    tint = CoralPrimary,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Reflect on this with Muse",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = CoralPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            }
         }
     }
 }
