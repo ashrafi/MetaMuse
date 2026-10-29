@@ -117,7 +117,7 @@ fun PresenceScreen(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Settings",
+                    text = "Setup Connections",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
                         color = DeepEspresso
@@ -125,7 +125,7 @@ fun PresenceScreen(
                 )
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
-                    text = "Configure your Meta AI Key and life telemetry bridges to feed Muse and your Tamagotchi.",
+                    text = "Connect Google Health, Tasks, Finance App, Facebook, and your Meta AI Key to feed Muse.",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = WarmSlateCharcoal
                     )

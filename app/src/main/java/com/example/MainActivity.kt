@@ -169,7 +169,7 @@ fun SerenityBottomNavBar(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterHorically
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 NavBarItem(
                     label = "Home",

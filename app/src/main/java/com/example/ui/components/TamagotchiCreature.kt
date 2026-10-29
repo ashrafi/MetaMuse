@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import com.example.model.TamagotchiMood
 import com.example.model.TamagotchiState
 import com.example.ui.theme.AmberTertiary
-import com.example.ui.theme.CoralActive
 import com.example.ui.theme.CoralHoverGlow
 import com.example.ui.theme.CoralPrimary
 import com.example.ui.theme.DeepEspresso
@@ -53,37 +52,39 @@ fun TamagotchiCreature(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "TamagotchiIdle")
 
-    // Gentle vertical floating breathing motion
+    val isSickOrSad = state.mood == TamagotchiMood.SICK ||
+        state.mood == TamagotchiMood.SAD ||
+        state.mood == TamagotchiMood.TIRED
+
+    val isHopeful = state.mood == TamagotchiMood.HOPEFUL
+
+    // Slow, subdued motion when sick/sad; lively floating motion when healthy/hopeful
+    val floatAmplitude = when {
+        state.mood == TamagotchiMood.SICK -> 2.5f
+        state.mood == TamagotchiMood.SAD || state.mood == TamagotchiMood.TIRED -> 4f
+        isHopeful -> 8f
+        else -> 11f
+    }
+
     val floatOffset by infiniteTransition.animateFloat(
-        initialValue = -10f,
-        targetValue = 10f,
+        initialValue = -floatAmplitude,
+        targetValue = floatAmplitude,
         animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = FastOutSlowInEasing),
+            animation = tween(2600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "FloatY"
     )
 
-    // Gentle aura breathing scale
+    // Gentle aura breathing scale (weak when sick)
     val auraScale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
+        initialValue = if (isSickOrSad) 0.82f else 0.92f,
+        targetValue = if (isSickOrSad) 0.90f else 1.09f,
         animationSpec = infiniteRepeatable(
             animation = tween(3000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "AuraScale"
-    )
-
-    // Continuous soft halo shimmer rotation
-    val haloShimmer by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "HaloShimmer"
     )
 
     // Periodic natural blinking
@@ -128,21 +129,33 @@ fun TamagotchiCreature(
             val centerX = canvasW / 2f
             val centerY = (canvasH / 2f) + floatOffset
 
-            // 1. Aura Halo Bloom (Reflecting life wellness score)
+            // 1. Aura Halo Bloom (Reflecting bio-responsive state)
             val lifeScore = state.overallLifeScore
             val auraColor = when {
                 state.isSleeping -> Color(0xFFCCC2DC)
+                state.mood == TamagotchiMood.SICK -> Color(0xFF9E9B95)
+                state.mood == TamagotchiMood.SAD -> Color(0xFF8DA3B8)
+                state.mood == TamagotchiMood.TIRED -> Color(0xFFB39F93)
+                state.mood == TamagotchiMood.HOPEFUL -> MintSecondary
                 lifeScore >= 80 -> CoralPrimary
                 lifeScore >= 60 -> MintSecondary
                 else -> AmberTertiary
+            }
+
+            val auraAlpha = when {
+                state.isSleeping -> 0.15f
+                state.mood == TamagotchiMood.SICK -> 0.12f
+                state.mood == TamagotchiMood.SAD -> 0.16f
+                state.mood == TamagotchiMood.HOPEFUL -> 0.28f
+                else -> 0.34f
             }
 
             val auraRadius = (canvasW * 0.44f) * auraScale * animatedBounceScale
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        auraColor.copy(alpha = if (state.isSleeping) 0.15f else 0.32f),
-                        auraColor.copy(alpha = 0.10f),
+                        auraColor.copy(alpha = auraAlpha),
+                        auraColor.copy(alpha = auraAlpha * 0.35f),
                         Color.Transparent
                     ),
                     center = Offset(centerX, centerY),
@@ -157,7 +170,7 @@ fun TamagotchiCreature(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        MintSecondary.copy(alpha = 0.25f),
+                        if (isSickOrSad) auraColor.copy(alpha = 0.10f) else MintSecondary.copy(alpha = 0.25f),
                         Color.Transparent
                     ),
                     center = Offset(centerX, centerY),
@@ -167,32 +180,45 @@ fun TamagotchiCreature(
                 center = Offset(centerX, centerY)
             )
 
-            // 2. Celestial Halo / Crown (Accessory)
+            // 2. Celestial Halo / Crown (Accessory - dims when sick)
             if (state.equippedAccessory.contains("Halo") || state.equippedAccessory.contains("Crown")) {
                 val haloY = centerY - (canvasH * 0.28f) * animatedBounceScale
+                val haloAlpha = if (isSickOrSad) 0.35f else 1.0f
                 drawOval(
                     brush = Brush.horizontalGradient(
-                        listOf(AmberTertiary, CoralHoverGlow, AmberTertiary)
+                        listOf(
+                            AmberTertiary.copy(alpha = haloAlpha),
+                            CoralHoverGlow.copy(alpha = haloAlpha),
+                            AmberTertiary.copy(alpha = haloAlpha)
+                        )
                     ),
                     topLeft = Offset(centerX - 36.dp.toPx(), haloY - 8.dp.toPx()),
                     size = Size(72.dp.toPx(), 16.dp.toPx()),
                     style = Stroke(width = 3.5.dp.toPx())
                 )
-                // Small celestial gem at top
                 drawCircle(
-                    color = Color.White,
+                    color = Color.White.copy(alpha = haloAlpha),
                     radius = 3.5.dp.toPx(),
                     center = Offset(centerX, haloY - 8.dp.toPx())
                 )
             }
 
-            // 3. Cute Wisps / Ears on sides
+            // 3. Cute Wisps / Ears on sides (droop lower when sick or sad)
             val earSpread = 38.dp.toPx() * animatedBounceScale
-            val earY = centerY - 16.dp.toPx()
+            val earDroop = if (isSickOrSad) 10.dp.toPx() else -16.dp.toPx()
+            val earY = centerY + earDroop
+            val earColors = if (isSickOrSad) {
+                listOf(Color(0xFFD5C8C4), Color(0xFFB5A4A0))
+            } else if (isHopeful) {
+                listOf(MintSecondary, CoralHoverGlow)
+            } else {
+                listOf(CoralHoverGlow, CoralPrimary)
+            }
+
             // Left Ear Wisp
             drawCircle(
                 brush = Brush.radialGradient(
-                    listOf(CoralHoverGlow, CoralPrimary),
+                    earColors,
                     center = Offset(centerX - earSpread, earY),
                     radius = 18.dp.toPx()
                 ),
@@ -202,7 +228,7 @@ fun TamagotchiCreature(
             // Right Ear Wisp
             drawCircle(
                 brush = Brush.radialGradient(
-                    listOf(CoralHoverGlow, CoralPrimary),
+                    earColors,
                     center = Offset(centerX + earSpread, earY),
                     radius = 18.dp.toPx()
                 ),
@@ -210,15 +236,28 @@ fun TamagotchiCreature(
                 center = Offset(centerX + earSpread, earY)
             )
 
-            // 4. Main Creature Body (Soft luminous pearlescent orb/egg shape)
+            // 4. Main Creature Body (Pale/wan when sick, soft pearlescent blush when healthy)
             val bodyRadius = (canvasW * 0.26f) * animatedBounceScale
+            val bodyGradientColors = when {
+                state.mood == TamagotchiMood.SICK -> listOf(
+                    Color(0xFFF7F5F2),
+                    Color(0xFFE9E4DD),
+                    Color(0xFFD8D0C5)
+                )
+                state.mood == TamagotchiMood.SAD || state.mood == TamagotchiMood.TIRED -> listOf(
+                    Color(0xFFF8F7FA),
+                    Color(0xFFE8ECF2),
+                    Color(0xFFD7DEE8)
+                )
+                else -> listOf(
+                    Color.White,
+                    Color(0xFFFFF0EC),
+                    Color(0xFFFFDAD5)
+                )
+            }
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White,
-                        Color(0xFFFFF0EC),
-                        Color(0xFFFFDAD5)
-                    ),
+                    colors = bodyGradientColors,
                     center = Offset(centerX - 8.dp.toPx(), centerY - 10.dp.toPx()),
                     radius = bodyRadius
                 ),
@@ -228,18 +267,23 @@ fun TamagotchiCreature(
 
             // Subtle body outline for soft tactile definition
             drawCircle(
-                color = CoralPrimary.copy(alpha = 0.25f),
+                color = if (isSickOrSad) Color(0xFF9E9490).copy(alpha = 0.35f) else CoralPrimary.copy(alpha = 0.25f),
                 radius = bodyRadius,
                 center = Offset(centerX, centerY),
                 style = Stroke(width = 1.5.dp.toPx())
             )
 
-            // 5. Rosy Cheeks (Coral blush bloom)
+            // 5. Cheeks (Coral blush when healthy/hopeful; faint fever/wan tint when sick)
             val cheekOffset = 18.dp.toPx() * animatedBounceScale
             val cheekY = centerY + 8.dp.toPx()
+            val cheekColor = when {
+                state.mood == TamagotchiMood.SICK -> AmberTertiary.copy(alpha = 0.28f)
+                state.mood == TamagotchiMood.SAD -> Color(0xFF8DA3B8).copy(alpha = 0.25f)
+                else -> CoralPrimary.copy(alpha = 0.55f)
+            }
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(CoralPrimary.copy(alpha = 0.55f), Color.Transparent),
+                    colors = listOf(cheekColor, Color.Transparent),
                     center = Offset(centerX - cheekOffset, cheekY),
                     radius = 10.dp.toPx()
                 ),
@@ -248,7 +292,7 @@ fun TamagotchiCreature(
             )
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(CoralPrimary.copy(alpha = 0.55f), Color.Transparent),
+                    colors = listOf(cheekColor, Color.Transparent),
                     center = Offset(centerX + cheekOffset, cheekY),
                     radius = 10.dp.toPx()
                 ),
@@ -261,7 +305,6 @@ fun TamagotchiCreature(
             val eyeY = centerY - 2.dp.toPx()
 
             if (state.isSleeping) {
-                // Sleeping closed eyes: gentle curved arcs `u u`
                 val leftEyePath = Path().apply {
                     moveTo(centerX - eyeSpacing - 7.dp.toPx(), eyeY)
                     quadraticTo(centerX - eyeSpacing, eyeY + 6.dp.toPx(), centerX - eyeSpacing + 7.dp.toPx(), eyeY)
@@ -273,7 +316,6 @@ fun TamagotchiCreature(
                 drawPath(leftEyePath, DeepEspresso, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
                 drawPath(rightEyePath, DeepEspresso, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
 
-                // Little floating zZz symbol
                 val zPath = Path().apply {
                     moveTo(centerX + eyeSpacing + 16.dp.toPx(), eyeY - 24.dp.toPx())
                     lineTo(centerX + eyeSpacing + 24.dp.toPx(), eyeY - 24.dp.toPx())
@@ -281,6 +323,32 @@ fun TamagotchiCreature(
                     lineTo(centerX + eyeSpacing + 24.dp.toPx(), eyeY - 14.dp.toPx())
                 }
                 drawPath(zPath, SageAccent, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+            } else if (isSickOrSad) {
+                // Worried / tired eyes with angled eyebrows and sweat/tear drop
+                val eyeRadius = 4.8.dp.toPx()
+                drawCircle(color = DeepEspresso.copy(alpha = 0.85f), radius = eyeRadius, center = Offset(centerX - eyeSpacing, eyeY + 2.dp.toPx()))
+                drawCircle(color = DeepEspresso.copy(alpha = 0.85f), radius = eyeRadius, center = Offset(centerX + eyeSpacing, eyeY + 2.dp.toPx()))
+
+                // Worried inner-slanted brows
+                val leftBrow = Path().apply {
+                    moveTo(centerX - eyeSpacing - 7.dp.toPx(), eyeY - 4.dp.toPx())
+                    lineTo(centerX - eyeSpacing + 5.dp.toPx(), eyeY - 8.dp.toPx())
+                }
+                val rightBrow = Path().apply {
+                    moveTo(centerX + eyeSpacing - 5.dp.toPx(), eyeY - 8.dp.toPx())
+                    lineTo(centerX + eyeSpacing + 7.dp.toPx(), eyeY - 4.dp.toPx())
+                }
+                drawPath(leftBrow, DeepEspresso.copy(alpha = 0.75f), style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(rightBrow, DeepEspresso.copy(alpha = 0.75f), style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round))
+
+                // Little sweat / tear droplet on temple
+                val dropX = centerX + eyeSpacing + 13.dp.toPx()
+                val dropY = eyeY - 2.dp.toPx()
+                drawCircle(
+                    color = Color(0xFF63B3ED),
+                    radius = 3.5.dp.toPx(),
+                    center = Offset(dropX, dropY)
+                )
             } else if (isBlinking || petBounceTrigger > 1.1f) {
                 // Happy curved eyes `^ ^`
                 val leftHappy = Path().apply {
@@ -296,28 +364,31 @@ fun TamagotchiCreature(
             } else {
                 // Wide, twinkling sparkling eyes
                 val eyeRadius = 5.5.dp.toPx()
-                // Left eye
                 drawCircle(color = DeepEspresso, radius = eyeRadius, center = Offset(centerX - eyeSpacing, eyeY))
                 drawCircle(color = Color.White, radius = 2.2.dp.toPx(), center = Offset(centerX - eyeSpacing - 1.5.dp.toPx(), eyeY - 1.5.dp.toPx()))
-                // Right eye
                 drawCircle(color = DeepEspresso, radius = eyeRadius, center = Offset(centerX + eyeSpacing, eyeY))
                 drawCircle(color = Color.White, radius = 2.2.dp.toPx(), center = Offset(centerX + eyeSpacing - 1.5.dp.toPx(), eyeY - 1.5.dp.toPx()))
             }
 
-            // 7. Cheerful Mouth
-            val mouthY = centerY + 8.dp.toPx()
+            // 7. Expressive Mouth
+            val mouthY = centerY + 10.dp.toPx()
             if (state.isSleeping) {
-                // Sleeping small gentle mouth `.`
                 drawCircle(color = DeepEspresso, radius = 1.8.dp.toPx(), center = Offset(centerX, mouthY))
-            } else if (lifeScore >= 75 || petBounceTrigger > 1.1f) {
+            } else if (isSickOrSad) {
+                // Downturned worried/sad mouth
+                val sadMouth = Path().apply {
+                    moveTo(centerX - 6.dp.toPx(), mouthY + 3.dp.toPx())
+                    quadraticTo(centerX, mouthY - 4.dp.toPx(), centerX + 6.dp.toPx(), mouthY + 3.dp.toPx())
+                }
+                drawPath(sadMouth, DeepEspresso, style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round))
+            } else if (lifeScore >= 75 || isHopeful || petBounceTrigger > 1.1f) {
                 // Big joyful open smile :D
                 val mouthPath = Path().apply {
-                    moveTo(centerX - 5.dp.toPx(), mouthY)
-                    quadraticTo(centerX, mouthY + 7.dp.toPx(), centerX + 5.dp.toPx(), mouthY)
+                    moveTo(centerX - 5.dp.toPx(), mouthY - 2.dp.toPx())
+                    quadraticTo(centerX, mouthY + 6.dp.toPx(), centerX + 5.dp.toPx(), mouthY - 2.dp.toPx())
                 }
                 drawPath(mouthPath, DeepEspresso, style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round))
             } else {
-                // Gentle content smile :)
                 val mouthPath = Path().apply {
                     moveTo(centerX - 4.dp.toPx(), mouthY)
                     quadraticTo(centerX, mouthY + 4.dp.toPx(), centerX + 4.dp.toPx(), mouthY)
@@ -325,16 +396,16 @@ fun TamagotchiCreature(
                 drawPath(mouthPath, DeepEspresso, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
             }
 
-            // 8. Petting Heart Particles (when petted)
-            if (petBounceTrigger > 1.05f) {
+            // 8. Petting Heart Particles (when petted or hopeful/radiant)
+            if (petBounceTrigger > 1.05f || isHopeful) {
                 drawCircle(
                     color = CoralPrimary.copy(alpha = 0.85f),
                     radius = 4.dp.toPx(),
                     center = Offset(centerX - 28.dp.toPx(), centerY - 28.dp.toPx())
                 )
                 drawCircle(
-                    color = AmberTertiary.copy(alpha = 0.9f),
-                    radius = 3.dp.toPx(),
+                    color = MintSecondary.copy(alpha = 0.9f),
+                    radius = 3.5.dp.toPx(),
                     center = Offset(centerX + 30.dp.toPx(), centerY - 24.dp.toPx())
                 )
             }

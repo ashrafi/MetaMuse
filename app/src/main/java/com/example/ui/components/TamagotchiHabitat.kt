@@ -19,9 +19,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.Psychology
@@ -260,7 +260,7 @@ fun TamagotchiHabitat(
                     label = "Physical Energy",
                     percent = state.physicalEnergy,
                     color = AmberTertiary,
-                    icon = Icons.Default.DirectionsWalk
+                    icon = Icons.AutoMirrored.Filled.DirectionsWalk
                 )
                 LifeVitalBar(
                     label = "Connection",
@@ -302,7 +302,7 @@ fun TamagotchiHabitat(
                 )
                 CaretakerActionButton(
                     label = "+ Walk",
-                    icon = Icons.Default.DirectionsWalk,
+                    icon = Icons.AutoMirrored.Filled.DirectionsWalk,
                     color = AmberTertiary,
                     onClick = onWalk,
                     testTag = "care_action_walk"
