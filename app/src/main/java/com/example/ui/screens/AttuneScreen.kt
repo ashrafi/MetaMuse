@@ -65,14 +65,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AccentType
 import com.example.model.CareActionLog
+import com.example.model.ChatMessage
 import com.example.model.DemoRecoveryStage
 import com.example.model.LifeQuest
 import com.example.model.MuseDemoScenario
 import com.example.model.ScreenNav
+import com.example.model.SyntheticTelemetrySnapshot
 import com.example.model.TamagotchiMood
 import com.example.model.TamagotchiState
 import com.example.model.ThoughtStream
@@ -113,6 +116,7 @@ fun AttuneScreen(
     val showFullHome by viewModel.showFullHome.collectAsState()
     val activeScenario by viewModel.activeDemoScenario.collectAsState()
     val recoveryStage by viewModel.demoRecoveryStage.collectAsState()
+    val telemetry by viewModel.telemetrySnapshot.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
     val careLogs by viewModel.careLogs.collectAsState()
@@ -139,8 +143,16 @@ fun AttuneScreen(
         if (!isFullScreen) {
             AvatarOnlyHomeView(
                 tamagotchi = tamagotchi,
+                activeScenario = activeScenario,
+                recoveryStage = recoveryStage,
+                telemetry = telemetry,
+                latestCompanionMessage = messages.lastOrNull { !it.isFromUser },
                 contentPadding = contentPadding,
                 onPet = { viewModel.petTamagotchi() },
+                onSelectScenario = { viewModel.activateDemoScenario(it) },
+                onQuickReply = { viewModel.sendQuickPrompt(it) },
+                onVerifyFollowThrough = { viewModel.completeDemoFollowThrough() },
+                onOpenDataTab = { viewModel.navigateTo(ScreenNav.DATA) },
                 onOpenFullHome = { viewModel.setShowFullHome(true) },
                 modifier = modifier
             )
@@ -617,47 +629,332 @@ fun AttuneScreen(
 @Composable
 private fun AvatarOnlyHomeView(
     tamagotchi: TamagotchiState,
+    activeScenario: MuseDemoScenario,
+    recoveryStage: DemoRecoveryStage,
+    telemetry: SyntheticTelemetrySnapshot,
+    latestCompanionMessage: ChatMessage?,
     contentPadding: PaddingValues,
     onPet: () -> Unit,
+    onSelectScenario: (MuseDemoScenario) -> Unit,
+    onQuickReply: (String) -> Unit,
+    onVerifyFollowThrough: () -> Unit,
+    onOpenDataTab: () -> Unit,
     onOpenFullHome: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val moodPulseColor = when (tamagotchi.mood) {
+        TamagotchiMood.SICK -> SerenityError
+        TamagotchiMood.SAD, TamagotchiMood.TIRED -> AmberTertiary
+        TamagotchiMood.HOPEFUL -> MintSecondary
+        else -> CoralPrimary
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(BaseCanvas)
             .padding(
-                top = contentPadding.calculateTopPadding() + 16.dp,
-                bottom = contentPadding.calculateBottomPadding() + 16.dp,
-                start = 24.dp,
-                end = 24.dp
+                top = contentPadding.calculateTopPadding() + 10.dp,
+                bottom = contentPadding.calculateBottomPadding() + 12.dp,
+                start = 20.dp,
+                end = 20.dp
             )
             .testTag("avatar_only_home_screen"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
+        // 1. Top Bio-Responsive Status Header + 1-Tap Demo Scenario Switcher
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                SerenityStatusChip(
+                    text = "${tamagotchi.mood.emoji} ${tamagotchi.name} is ${tamagotchi.mood.title} • ${tamagotchi.overallLifeScore}%",
+                    pulseColor = moodPulseColor
+                )
+            }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val scenarios = listOf(
+                MuseDemoScenario.NONE to "Healthy",
+                MuseDemoScenario.SUCCESS_TRAP to "1. Success Trap",
+                MuseDemoScenario.INVISIBLE_MONEY_LEAK to "2. Money Leak",
+                MuseDemoScenario.CONNECTION_DEBT to "3. Connection Debt"
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(scenarios) { (scenario, shortLabel) ->
+                    val isSelected = activeScenario == scenario
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isSelected) CoralPrimary else FloatingSurface,
+                        modifier = Modifier
+                            .border(
+                                1.dp,
+                                if (isSelected) CoralPrimary else WarmBorder,
+                                CircleShape
+                            )
+                            .clip(CircleShape)
+                            .clickable { onSelectScenario(scenario) }
+                    ) {
+                        Text(
+                            text = shortLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (isSelected) Color.White else DeepEspresso,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 11.sp
+                            ),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Centerpiece: Bio-Responsive Avatar + 4 Corner Channel Micro-Satellites
         Box(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
             contentAlignment = Alignment.Center
         ) {
-            TamagotchiCreature(
-                state = tamagotchi,
-                onPet = onPet,
-                size = 300.dp
+            // Top-Left Satellite: Health
+            HomeChannelSatellitePill(
+                label = "Health",
+                score = telemetry.healthReport.scorePercent,
+                isAlert = telemetry.healthReport.isAlert,
+                accentColor = MintSecondary,
+                onClick = onOpenDataTab,
+                modifier = Modifier.align(Alignment.TopStart)
+            )
+
+            // Top-Right Satellite: Tasks
+            HomeChannelSatellitePill(
+                label = "Tasks",
+                score = telemetry.tasksReport.scorePercent,
+                isAlert = telemetry.tasksReport.isAlert,
+                accentColor = SageAccent,
+                onClick = onOpenDataTab,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+
+            // The Living Companion Charm
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TamagotchiCreature(
+                    state = tamagotchi,
+                    onPet = onPet,
+                    size = 225.dp
+                )
+                Text(
+                    text = "✨ Tap ${tamagotchi.name} to nurture (${tamagotchi.totalPets} hugs)",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = WarmSlateCharcoal,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 11.sp
+                    )
+                )
+            }
+
+            // Bottom-Left Satellite: Finance
+            HomeChannelSatellitePill(
+                label = "Finance",
+                score = telemetry.financeReport.scorePercent,
+                isAlert = telemetry.financeReport.isAlert,
+                accentColor = AmberTertiary,
+                onClick = onOpenDataTab,
+                modifier = Modifier.align(Alignment.BottomStart)
+            )
+
+            // Bottom-Right Satellite: Social
+            HomeChannelSatellitePill(
+                label = "Social",
+                score = telemetry.socialReport.scorePercent,
+                isAlert = telemetry.socialReport.isAlert,
+                accentColor = CoralPrimary,
+                onClick = onOpenDataTab,
+                modifier = Modifier.align(Alignment.BottomEnd)
             )
         }
 
-        SerenityPrimaryButton(
-            text = "Open Companion Hub",
-            icon = Icons.Default.Dashboard,
-            onClick = onOpenFullHome,
+        // 3. Proactive Companion Voice & Interactive Quick Response Card
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            testTag = "open_full_home_button"
-        )
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            val bubbleBorderColor = when {
+                tamagotchi.mood == TamagotchiMood.SICK -> SerenityError.copy(alpha = 0.45f)
+                tamagotchi.mood == TamagotchiMood.HOPEFUL -> MintSecondary.copy(alpha = 0.65f)
+                else -> WarmBorder
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(
+                        elevation = 6.dp,
+                        shape = RoundedCornerShape(24.dp),
+                        ambientColor = moodPulseColor.copy(alpha = 0.14f)
+                    )
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(FloatingSurface)
+                    .border(1.5.dp, bubbleBorderColor, RoundedCornerShape(24.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (activeScenario != MuseDemoScenario.NONE) {
+                                "${tamagotchi.name} • ${activeScenario.intelligenceKind}"
+                            } else {
+                                "${tamagotchi.name} • Symbiotic Presence"
+                            },
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (tamagotchi.mood == TamagotchiMood.SICK) SerenityError else CoralPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        )
+                        Text(
+                            text = "LVL ${tamagotchi.level}",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = SoftMutedText,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    val displayedSpeech = latestCompanionMessage?.content ?: tamagotchi.speech
+                    Text(
+                        text = "\"$displayedSpeech\"",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = DeepEspresso,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 18.sp
+                        ),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    // Interactive 1-tap Demo Action right on the Home screen
+                    if (activeScenario != MuseDemoScenario.NONE && recoveryStage == DemoRecoveryStage.HOPEFUL_COMMITTED) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = MintContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, MintSecondary, CircleShape)
+                                .clip(CircleShape)
+                                .clickable(onClick = onVerifyFollowThrough)
+                        ) {
+                            Text(
+                                text = "🌱 ${activeScenario.followThroughButtonLabel}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = DarkSageText,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
+                    } else if (latestCompanionMessage?.suggestedPrompts?.isNotEmpty() == true) {
+                        val firstPrompt = latestCompanionMessage.suggestedPrompts.first()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = SubtleContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, CoralPrimary.copy(alpha = 0.4f), CircleShape)
+                                .clip(CircleShape)
+                                .clickable { onQuickReply(firstPrompt) }
+                        ) {
+                            Text(
+                                text = "💬 Reply: \"$firstPrompt\"",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = CoralPrimary,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 4. Bottom Navigation Button to Full Companion Hub
+            SerenityPrimaryButton(
+                text = "Open Companion Hub",
+                icon = Icons.Default.Dashboard,
+                onClick = onOpenFullHome,
+                modifier = Modifier.fillMaxWidth(),
+                testTag = "open_full_home_button"
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeChannelSatellitePill(
+    label: String,
+    score: Int,
+    isAlert: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bgColor = if (isAlert) SerenityErrorContainer else FloatingSurface
+    val borderColor = if (isAlert) SerenityError.copy(alpha = 0.55f) else WarmBorder
+    val dotColor = if (isAlert) SerenityError else accentColor
+    val textColor = if (isAlert) SerenityError else DeepEspresso
+
+    Surface(
+        shape = CircleShape,
+        color = bgColor,
+        modifier = modifier
+            .shadow(3.dp, CircleShape)
+            .border(1.dp, borderColor, CircleShape)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = "$label $score%",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp
+                )
+            )
+        }
     }
 }
 

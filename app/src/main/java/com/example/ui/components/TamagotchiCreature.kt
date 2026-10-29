@@ -41,7 +41,10 @@ import com.example.ui.theme.CoralPrimary
 import com.example.ui.theme.DeepEspresso
 import com.example.ui.theme.MintSecondary
 import com.example.ui.theme.SageAccent
+import com.example.ui.theme.SerenityError
 import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 fun TamagotchiCreature(
@@ -85,6 +88,17 @@ fun TamagotchiCreature(
             repeatMode = RepeatMode.Reverse
         ),
         label = "AuraScale"
+    )
+
+    // Orbital bio-resonance angle for living satellite motes
+    val orbitAngleDeg by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(if (isSickOrSad) 18000 else 9500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "OrbitAngle"
     )
 
     // Periodic natural blinking
@@ -179,6 +193,35 @@ fun TamagotchiCreature(
                 radius = innerAuraRadius,
                 center = Offset(centerX, centerY)
             )
+
+            // 1b. Levitation Ground Shadow (scales inversely with floatOffset for 3D depth)
+            val shadowY = (canvasH / 2f) + (canvasH * 0.34f)
+            val shadowScale = (1f - (floatOffset / 28f)).coerceIn(0.75f, 1.15f)
+            drawOval(
+                color = DeepEspresso.copy(alpha = 0.08f * shadowScale),
+                topLeft = Offset(centerX - (28.dp.toPx() * shadowScale), shadowY - 5.dp.toPx()),
+                size = Size(56.dp.toPx() * shadowScale, 10.dp.toPx() * shadowScale)
+            )
+
+            // 1c. Orbital Bio-Resonance Motes (4 living satellites representing Health, Tasks, Finance, Social)
+            val orbitRadius = canvasW * 0.37f
+            val moteColors = if (state.mood == TamagotchiMood.SICK) {
+                listOf(SerenityError, AmberTertiary, Color(0xFF9E9B95), SerenityError)
+            } else if (state.mood == TamagotchiMood.SAD) {
+                listOf(Color(0xFF8DA3B8), MintSecondary.copy(alpha = 0.6f), AmberTertiary.copy(alpha = 0.6f), SerenityError)
+            } else {
+                listOf(MintSecondary, SageAccent, AmberTertiary, CoralPrimary)
+            }
+            moteColors.forEachIndexed { idx, moteColor ->
+                val rad = Math.toRadians((orbitAngleDeg + idx * 90f).toDouble())
+                val mx = centerX + (orbitRadius * cos(rad)).toFloat()
+                val my = centerY + (orbitRadius * 0.68f * sin(rad)).toFloat()
+                drawCircle(
+                    color = moteColor.copy(alpha = if (isSickOrSad) 0.35f else 0.75f),
+                    radius = if (idx % 2 == 0) 4.dp.toPx() else 3.dp.toPx(),
+                    center = Offset(mx, my)
+                )
+            }
 
             // 2. Celestial Halo / Crown (Accessory - dims when sick)
             if (state.equippedAccessory.contains("Halo") || state.equippedAccessory.contains("Crown")) {
@@ -396,7 +439,41 @@ fun TamagotchiCreature(
                 drawPath(mouthPath, DeepEspresso, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
             }
 
-            // 8. Petting Heart Particles (when petted or hopeful/radiant)
+            // 8. Bio-Resonance Heart Crystal on Chest + Floating Paws
+            val crystalY = centerY + (bodyRadius * 0.56f)
+            val crystalColor = when (state.mood) {
+                TamagotchiMood.SICK -> SerenityError
+                TamagotchiMood.SAD, TamagotchiMood.TIRED -> Color(0xFF8DA3B8)
+                TamagotchiMood.HOPEFUL -> MintSecondary
+                else -> CoralPrimary
+            }
+            drawCircle(
+                color = crystalColor.copy(alpha = 0.25f * auraScale),
+                radius = 7.dp.toPx(),
+                center = Offset(centerX, crystalY)
+            )
+            drawCircle(
+                color = crystalColor,
+                radius = 3.5.dp.toPx(),
+                center = Offset(centerX, crystalY)
+            )
+
+            // Cute little floating hands/paws on either side of the body
+            val pawSpread = bodyRadius * 0.88f
+            val pawY = if (isSickOrSad) centerY + (bodyRadius * 0.38f) else centerY + (bodyRadius * 0.16f)
+            val pawColor = if (isSickOrSad) Color(0xFFE0D7D0) else Color(0xFFFFE5DF)
+            drawCircle(
+                color = pawColor,
+                radius = 6.5.dp.toPx() * animatedBounceScale,
+                center = Offset(centerX - pawSpread, pawY)
+            )
+            drawCircle(
+                color = pawColor,
+                radius = 6.5.dp.toPx() * animatedBounceScale,
+                center = Offset(centerX + pawSpread, pawY)
+            )
+
+            // 9. Petting / State Particles (when petted, hopeful, or radiant)
             if (petBounceTrigger > 1.05f || isHopeful) {
                 drawCircle(
                     color = CoralPrimary.copy(alpha = 0.85f),
