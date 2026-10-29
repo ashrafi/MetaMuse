@@ -231,371 +231,377 @@ fun AttuneScreen(
                     }
                 }
 
-                // 2. Interactive MuseLife Demo Switcher (Pre-loads synthetic data & deterministic trigger)
-                item {
-                    MuseDemoSelectorCard(
-                        activeScenario = activeScenario,
-                        recoveryStage = recoveryStage,
-                        onSelectScenario = { viewModel.activateDemoScenario(it) },
-                        onVerifyFollowThrough = { viewModel.completeDemoFollowThrough() },
-                        onOpenDataTab = { viewModel.navigateTo(ScreenNav.DATA) }
-                    )
+        // 2. Interactive MuseLife Demo Switcher (Pre-loads synthetic data & deterministic trigger)
+        item {
+            MuseDemoSelectorCard(
+                activeScenario = activeScenario,
+                recoveryStage = recoveryStage,
+                onSelectScenario = { viewModel.activateDemoScenario(it) },
+                onVerifyFollowThrough = { viewModel.completeDemoFollowThrough() },
+                onOpenDataTab = {
+                    viewModel.navigateTo(ScreenNav.DATA)
+                    viewModel.setShowFullData(true)
                 }
+            )
+        }
 
-                // 3. The Tamagotchi Habitat Pod (Living Creature, Life Vitals & Caretaker Actions)
-                item {
-                    TamagotchiHabitat(
-                        state = tamagotchi,
-                        onPet = { viewModel.petTamagotchi() },
-                        onSleepToggle = { viewModel.toggleSleepMode() },
-                        onWater = { viewModel.feedWater() },
-                        onBreathe = { viewModel.doBreathReset() },
-                        onWalk = { viewModel.logMovementWalk() },
-                        onFocus = { viewModel.logFocusSprint() },
-                        onConnect = { viewModel.logConnection() }
-                    )
-                }
+        // 3. The Tamagotchi Habitat Pod (Living Creature, Life Vitals & Caretaker Actions)
+        item {
+            TamagotchiHabitat(
+                state = tamagotchi,
+                onPet = { viewModel.petTamagotchi() },
+                onSleepToggle = { viewModel.toggleSleepMode() },
+                onWater = { viewModel.feedWater() },
+                onBreathe = { viewModel.doBreathReset() },
+                onWalk = { viewModel.logMovementWalk() },
+                onFocus = { viewModel.logFocusSprint() },
+                onConnect = { viewModel.logConnection() }
+            )
+        }
 
-                // 4. Proactive Companion Dialogue Stream (Muse initiates & user responds directly on Home)
-                item {
-                    ProactiveCompanionDialogueCard(
-                        companionName = tamagotchi.name,
-                        activeScenario = activeScenario,
-                        recoveryStage = recoveryStage,
-                        messages = messages,
-                        inputText = inputText,
-                        isInputFocused = isInputFocused,
-                        onFocusChange = { isInputFocused = it },
-                        onInputChange = { viewModel.updateInputText(it) },
-                        onSend = { viewModel.sendCurrentMessage() },
-                        onPromptClick = { viewModel.sendQuickPrompt(it) },
-                        onVerifyFollowThrough = { viewModel.completeDemoFollowThrough() }
-                    )
-                }
+        // 4. Proactive Companion Dialogue Stream (Muse initiates & user responds directly on Home)
+        item {
+            ProactiveCompanionDialogueCard(
+                companionName = tamagotchi.name,
+                activeScenario = activeScenario,
+                recoveryStage = recoveryStage,
+                messages = messages,
+                inputText = inputText,
+                isInputFocused = isInputFocused,
+                onFocusChange = { isInputFocused = it },
+                onInputChange = { viewModel.updateInputText(it) },
+                onSend = { viewModel.sendCurrentMessage() },
+                onPromptClick = { viewModel.sendQuickPrompt(it) },
+                onVerifyFollowThrough = { viewModel.completeDemoFollowThrough() }
+            )
+        }
 
-                // 5. Mindful Breath Active Banner (if user clicked breathe)
-                item {
-                    AnimatedVisibility(
-                        visible = isBreathingActive,
-                        enter = fadeIn(),
-                        exit = fadeOut()
+        // 5. Mindful Breath Active Banner (if user clicked breathe)
+        item {
+            AnimatedVisibility(
+                visible = isBreathingActive,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(26.dp),
+                            ambientColor = MintSecondary.copy(alpha = 0.25f),
+                            spotColor = CoralPrimary.copy(alpha = 0.15f)
+                        )
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(FloatingSurface)
+                        .border(1.5.dp, MintSecondary.copy(alpha = 0.6f), RoundedCornerShape(26.dp))
+                        .padding(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .shadow(
-                                    elevation = 8.dp,
-                                    shape = RoundedCornerShape(26.dp),
-                                    ambientColor = MintSecondary.copy(alpha = 0.25f),
-                                    spotColor = CoralPrimary.copy(alpha = 0.15f)
-                                )
-                                .clip(RoundedCornerShape(26.dp))
-                                .background(FloatingSurface)
-                                .border(1.5.dp, MintSecondary.copy(alpha = 0.6f), RoundedCornerShape(26.dp))
-                                .padding(18.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(MintContainer),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(CircleShape)
-                                            .background(MintContainer),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Spa,
-                                            contentDescription = null,
-                                            tint = DarkSageText,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text(
-                                            text = "Mindful Breath Sync",
-                                            style = MaterialTheme.typography.labelMedium.copy(
-                                                color = SageAccent,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
-                                        Text(
-                                            text = breathPhase,
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                color = DeepEspresso,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { viewModel.toggleBreathingExercise() },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Close breath reset",
-                                        tint = WarmSlateCharcoal
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 6. Muse Superintelligence Life Telemetry Sync
-                item {
-                    SerenityCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("muse_sync_card")
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(18.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .clip(CircleShape)
-                                            .background(CoralPrimary.copy(alpha = 0.14f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AutoAwesome,
-                                            contentDescription = null,
-                                            tint = CoralPrimary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = "Send Info to Muse",
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = DeepEspresso
-                                            )
-                                        )
-                                        Text(
-                                            text = "Life Telemetry → AI Guidance",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                color = WarmSlateCharcoal
-                                            )
-                                        )
-                                    }
-                                }
-
-                                if (metaAiConfig.token.isNotBlank()) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = MintContainer
-                                    ) {
-                                        Text(
-                                            text = "Token Connected",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                color = DarkSageText,
-                                                fontWeight = FontWeight.Bold
-                                            ),
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                        )
-                                    }
-                                } else {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = SubtleContainer,
-                                        modifier = Modifier
-                                            .clip(CircleShape)
-                                            .clickable { viewModel.navigateTo(ScreenNav.CONNECTIONS) }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Key,
-                                                contentDescription = null,
-                                                tint = CoralPrimary,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "Add Token",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    color = CoralPrimary,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Text(
-                                text = "Packages ${tamagotchi.name}'s 5 vitals, habit quests, and care history to Muse to generate an adaptive life prescription.",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = WarmSlateCharcoal,
-                                    lineHeight = 18.sp
-                                )
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                SerenityPrimaryButton(
-                                    text = if (isSyncingWithMuse) "Transmitting..." else "Consult Muse for Advice",
-                                    icon = Icons.Default.Sync,
-                                    onClick = { viewModel.sendAllInfoToMuse() },
-                                    modifier = Modifier.weight(1f),
-                                    testTag = "home_send_to_muse_button"
+                                Icon(
+                                    imageVector = Icons.Default.Spa,
+                                    contentDescription = null,
+                                    tint = DarkSageText,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
-
-                            latestMuseAdvice?.let { advice ->
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(SubtleContainer)
-                                        .border(1.dp, WarmBorder, RoundedCornerShape(16.dp))
-                                        .padding(12.dp)
-                                ) {
-                                    Column {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = advice.headline,
-                                                style = MaterialTheme.typography.labelMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = CoralPrimary
-                                                )
-                                            )
-                                            Text(
-                                                text = advice.timestamp,
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    color = SoftMutedText,
-                                                    fontSize = 10.sp
-                                                )
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = advice.tamagotchiPrescription,
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                color = DeepEspresso
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 7. Today's Life Quests
-                item {
-                    SerenityCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(18.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
                                 Text(
-                                    text = "Today's Life Quests",
+                                    text = "Mindful Breath Sync",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        color = SageAccent,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                                Text(
+                                    text = breathPhase,
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        color = DeepEspresso,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = { viewModel.toggleBreathingExercise() },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close breath reset",
+                                tint = WarmSlateCharcoal
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 6. Muse Superintelligence Life Telemetry Sync
+        item {
+            SerenityCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("muse_sync_card")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(CoralPrimary.copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = CoralPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Send Info to Muse",
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = DeepEspresso
                                     )
                                 )
-                                Surface(
-                                    shape = CircleShape,
-                                    color = CoralPrimary.copy(alpha = 0.12f)
+                                Text(
+                                    text = "Life Telemetry → AI Guidance",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = WarmSlateCharcoal
+                                    )
+                                )
+                            }
+                        }
+
+                        if (metaAiConfig.token.isNotBlank()) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MintContainer
+                            ) {
+                                Text(
+                                    text = "Token Connected",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = DarkSageText,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        } else {
+                            Surface(
+                                shape = CircleShape,
+                                color = SubtleContainer,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        viewModel.navigateTo(ScreenNav.CONNECTIONS)
+                                        viewModel.setShowFullConnections(true)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Key,
+                                        contentDescription = null,
+                                        tint = CoralPrimary,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "${lifeQuests.count { it.isCompleted }} / ${lifeQuests.size} Done",
+                                        text = "Add Token",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = CoralPrimary,
                                             fontWeight = FontWeight.Bold
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                lifeQuests.forEach { quest ->
-                                    LifeQuestRow(
-                                        quest = quest,
-                                        onToggle = { viewModel.toggleQuest(quest.id) }
+                                        )
                                     )
                                 }
                             }
                         }
                     }
-                }
 
-                // 8. Recent Care Logs
-                item {
-                    SerenityCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "Packages ${tamagotchi.name}'s 5 vitals, habit quests, and care history to Muse to generate an adaptive life prescription.",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = WarmSlateCharcoal,
+                            lineHeight = 18.sp
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SerenityPrimaryButton(
+                            text = if (isSyncingWithMuse) "Transmitting..." else "Consult Muse for Advice",
+                            icon = Icons.Default.Sync,
+                            onClick = { viewModel.sendAllInfoToMuse() },
+                            modifier = Modifier.weight(1f),
+                            testTag = "home_send_to_muse_button"
+                        )
+                    }
+
+                    latestMuseAdvice?.let { advice ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(18.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(SubtleContainer)
+                                .border(1.dp, WarmBorder, RoundedCornerShape(16.dp))
+                                .padding(12.dp)
                         ) {
-                            Text(
-                                text = "Recent Life Care Nurturing",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = DeepEspresso
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = advice.headline,
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = CoralPrimary
+                                        )
+                                    )
+                                    Text(
+                                        text = advice.timestamp,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = SoftMutedText,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = advice.tamagotchiPrescription,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = DeepEspresso
+                                    )
                                 )
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            careLogs.take(4).forEach { log ->
-                                CareLogRow(log = log)
-                                Spacer(modifier = Modifier.height(6.dp))
                             }
                         }
                     }
                 }
+            }
+        }
 
-                // 9. Life Attunement Thought Streams
-                item {
+        // 7. Today's Life Quests
+        item {
+            SerenityCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Today's Life Quests",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = DeepEspresso
+                            )
+                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = CoralPrimary.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = "${lifeQuests.count { it.isCompleted }} / ${lifeQuests.size} Done",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = CoralPrimary,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        lifeQuests.forEach { quest ->
+                            LifeQuestRow(
+                                quest = quest,
+                                onToggle = { viewModel.toggleQuest(quest.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 8. Recent Care Logs
+        item {
+            SerenityCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                ) {
                     Text(
-                        text = "Cognitive Synthesis for ${tamagotchi.name}",
+                        text = "Recent Life Care Nurturing",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = DeepEspresso
                         )
                     )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    careLogs.take(4).forEach { log ->
+                        CareLogRow(log = log)
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
                 }
+            }
+        }
+
+        // 9. Life Attunement Thought Streams
+        item {
+            Text(
+                text = "Cognitive Synthesis for ${tamagotchi.name}",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = DeepEspresso
+                )
+            )
+        }
 
                 items(viewModel.thoughtStreams) { stream ->
                     ThoughtStreamCard(

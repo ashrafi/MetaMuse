@@ -36,6 +36,20 @@ class SerenityViewModel(
         _showFullHome.value = show
     }
 
+    private val _showFullData = MutableStateFlow(false)
+    val showFullData: StateFlow<Boolean> = _showFullData.asStateFlow()
+
+    fun setShowFullData(show: Boolean) {
+        _showFullData.value = show
+    }
+
+    private val _showFullConnections = MutableStateFlow(false)
+    val showFullConnections: StateFlow<Boolean> = _showFullConnections.asStateFlow()
+
+    fun setShowFullConnections(show: Boolean) {
+        _showFullConnections.value = show
+    }
+
     val tamagotchiState: StateFlow<TamagotchiState> = repository.tamagotchiState
     val activeDemoScenario: StateFlow<MuseDemoScenario> = repository.activeDemoScenario
     val demoRecoveryStage: StateFlow<DemoRecoveryStage> = repository.demoRecoveryStage
@@ -151,8 +165,10 @@ class SerenityViewModel(
     }
 
     fun navigateTo(screen: ScreenNav) {
-        if (screen == ScreenNav.HOME || screen == ScreenNav.ATTUNE) {
-            _showFullHome.value = false
+        when (screen) {
+            ScreenNav.HOME, ScreenNav.ATTUNE, ScreenNav.DIALOGUE -> _showFullHome.value = false
+            ScreenNav.DATA, ScreenNav.VITALITY, ScreenNav.VAULT -> _showFullData.value = false
+            ScreenNav.CONNECTIONS, ScreenNav.PRESENCE -> _showFullConnections.value = false
         }
         _currentScreen.value = screen
     }

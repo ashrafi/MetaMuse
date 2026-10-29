@@ -54,6 +54,10 @@ class ExampleRobolectricTest {
 
         viewModel.navigateTo(ScreenNav.DATA)
         assertEquals(ScreenNav.DATA, viewModel.currentScreen.value)
+        assertEquals(false, viewModel.showFullData.value)
+
+        viewModel.setShowFullData(true)
+        assertEquals(true, viewModel.showFullData.value)
 
         viewModel.navigateTo(ScreenNav.ATTUNE)
         assertEquals(ScreenNav.ATTUNE, viewModel.currentScreen.value)
@@ -61,6 +65,10 @@ class ExampleRobolectricTest {
 
         viewModel.navigateTo(ScreenNav.CONNECTIONS)
         assertEquals(ScreenNav.CONNECTIONS, viewModel.currentScreen.value)
+        assertEquals(false, viewModel.showFullConnections.value)
+
+        viewModel.setShowFullConnections(true)
+        assertEquals(true, viewModel.showFullConnections.value)
 
         viewModel.setPresenceMode(PresenceMode.CREATIVE_MUSE)
         assertEquals(PresenceMode.CREATIVE_MUSE, viewModel.selectedMode.value)
