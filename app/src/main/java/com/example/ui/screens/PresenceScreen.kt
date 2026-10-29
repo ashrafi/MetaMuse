@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -75,6 +76,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.LifeSyncIntegrations
@@ -131,7 +133,13 @@ fun PresenceScreen(
             SimpleConnectionsGraphicView(
                 integrations = integrations,
                 isMetaKeyConnected = metaAiConfig.token.isNotBlank(),
+                isSyncingWithMuse = isSyncingWithMuse,
                 contentPadding = contentPadding,
+                onToggleGoogleHealth = { viewModel.toggleGoogleHealth() },
+                onToggleTasks = { viewModel.toggleTasksApp() },
+                onToggleFinance = { viewModel.toggleFinanceApp() },
+                onToggleFacebook = { viewModel.toggleFacebook() },
+                onSyncToMuse = { viewModel.sendAllInfoToMuse() },
                 onOpenFullConnections = { viewModel.setShowFullConnections(true) },
                 modifier = modifier
             )
@@ -459,41 +467,212 @@ fun PresenceScreen(
 private fun SimpleConnectionsGraphicView(
     integrations: LifeSyncIntegrations,
     isMetaKeyConnected: Boolean,
+    isSyncingWithMuse: Boolean,
     contentPadding: PaddingValues,
+    onToggleGoogleHealth: () -> Unit,
+    onToggleTasks: () -> Unit,
+    onToggleFinance: () -> Unit,
+    onToggleFacebook: () -> Unit,
+    onSyncToMuse: () -> Unit,
     onOpenFullConnections: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val activeCount = listOf(
+        integrations.googleHealthConnected,
+        integrations.tasksAppConnected,
+        integrations.financeAppConnected,
+        integrations.facebookConnected,
+        isMetaKeyConnected
+    ).count { it }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(BaseCanvas)
             .padding(
-                top = contentPadding.calculateTopPadding() + 16.dp,
-                bottom = contentPadding.calculateBottomPadding() + 16.dp,
-                start = 24.dp,
-                end = 24.dp
+                top = contentPadding.calculateTopPadding() + 10.dp,
+                bottom = contentPadding.calculateBottomPadding() + 12.dp,
+                start = 20.dp,
+                end = 20.dp
             )
             .testTag("simple_connections_graphic_screen"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            contentAlignment = Alignment.Center
+        // 1. Top Status Chip & Title
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ConnectionsHubGraphic(
-                integrations = integrations,
-                isMetaKeyConnected = isMetaKeyConnected,
-                modifier = Modifier
-                    .size(300.dp)
-                    .clickable(onClick = onOpenFullConnections)
+            SerenityStatusChip(
+                text = "$activeCount of 5 Life Streams Synced • Tap Node to Toggle",
+                pulseColor = if (activeCount >= 4) MintSecondary else AmberTertiary
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Life-Sync Constellation",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = DeepEspresso
+                )
+            )
+            Text(
+                text = "Real-time signals feeding Muse's bio-responsive intelligence.",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = WarmSlateCharcoal
+                )
             )
         }
 
+        // 2. Centerpiece: Animated Constellation Hub + Interactive 2x2 Quick-Toggle Grid
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Box(
+                contentAlignment = Alignment.Center
+            ) {
+                ConnectionsHubGraphic(
+                    integrations = integrations,
+                    isMetaKeyConnected = isMetaKeyConnected,
+                    modifier = Modifier
+                        .size(205.dp)
+                        .clickable(onClick = onOpenFullConnections)
+                )
+            }
+
+            // Interactive 2x2 Quick-Toggle Integration Grid
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CompactIntegrationToggleTile(
+                        title = "Google Health",
+                        subtitle = "7,840 steps • 7.4h sleep",
+                        isConnected = integrations.googleHealthConnected,
+                        icon = Icons.Default.Favorite,
+                        accentColor = MintSecondary,
+                        onClick = onToggleGoogleHealth,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompactIntegrationToggleTile(
+                        title = "Tasks App",
+                        subtitle = "4/5 focus tasks done",
+                        isConnected = integrations.tasksAppConnected,
+                        icon = Icons.Default.TaskAlt,
+                        accentColor = SageAccent,
+                        onClick = onToggleTasks,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CompactIntegrationToggleTile(
+                        title = "Finance App",
+                        subtitle = "Mindful budget synced",
+                        isConnected = integrations.financeAppConnected,
+                        icon = Icons.Default.AccountBalance,
+                        accentColor = AmberTertiary,
+                        onClick = onToggleFinance,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompactIntegrationToggleTile(
+                        title = "Facebook",
+                        subtitle = "Friends & call log",
+                        isConnected = integrations.facebookConnected,
+                        icon = Icons.Default.Groups,
+                        accentColor = CoralPrimary,
+                        onClick = onToggleFacebook,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Meta AI Key & Instant Muse Sync Strip
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(3.dp, RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(FloatingSurface)
+                    .border(
+                        1.dp,
+                        if (isMetaKeyConnected) MintSecondary.copy(alpha = 0.6f) else WarmBorder,
+                        RoundedCornerShape(18.dp)
+                    )
+                    .clickable(onClick = onOpenFullConnections)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(CoralPrimary.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Key,
+                                contentDescription = null,
+                                tint = CoralPrimary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Meta AI Superintelligence Key",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = DeepEspresso
+                                )
+                            )
+                            Text(
+                                text = if (isMetaKeyConnected) "Bearer Token Active • Ready" else "Tap to add token or transmit telemetry",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (isMetaKeyConnected) DarkSageText else WarmSlateCharcoal,
+                                    fontSize = 10.sp
+                                )
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = CircleShape,
+                        color = CoralPrimary.copy(alpha = 0.14f),
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable(onClick = onSyncToMuse)
+                    ) {
+                        Text(
+                            text = if (isSyncingWithMuse) "Syncing..." else "Sync Muse",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = CoralPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            ),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. Bottom Navigation Button to Full Connections Screen
         SerenityPrimaryButton(
             text = "Setup Connections",
             icon = Icons.Default.Hub,
@@ -501,6 +680,85 @@ private fun SimpleConnectionsGraphicView(
             modifier = Modifier.fillMaxWidth(),
             testTag = "open_full_connections_button"
         )
+    }
+}
+
+@Composable
+private fun CompactIntegrationToggleTile(
+    title: String,
+    subtitle: String,
+    isConnected: Boolean,
+    icon: ImageVector,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val borderColor = if (isConnected) accentColor.copy(alpha = 0.55f) else WarmBorder
+    val badgeBg = if (isConnected) accentColor.copy(alpha = 0.15f) else SubtleContainer
+
+    Box(
+        modifier = modifier
+            .shadow(3.dp, RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (isConnected) FloatingSurface else RecessedContainer)
+            .border(1.dp, borderColor, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(badgeBg),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = if (isConnected) accentColor else SoftMutedText,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = if (isConnected) DeepEspresso else SoftMutedText
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (isConnected) accentColor else SoftMutedText.copy(alpha = 0.4f))
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = if (isConnected) subtitle else "Disconnected • Tap to connect",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = if (isConnected) WarmSlateCharcoal else SoftMutedText,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 10.sp
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -521,13 +779,23 @@ private fun ConnectionsHubGraphic(
         label = "HubPulse"
     )
     val floatOffset by infiniteTransition.animateFloat(
-        initialValue = -6f,
-        targetValue = 6f,
+        initialValue = -5f,
+        targetValue = 5f,
         animationSpec = infiniteRepeatable(
             animation = tween(2900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "HubFloatY"
+    )
+    // Traveling photon particle progress from satellite -> Muse Core (0f..1f)
+    val photonProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "PhotonStream"
     )
 
     Canvas(modifier = modifier) {
@@ -537,7 +805,7 @@ private fun ConnectionsHubGraphic(
         val cy = (h / 2f) + floatOffset
 
         // 1. Ambient Network Glow
-        val auraRadius = (w * 0.45f) * pulseScale
+        val auraRadius = (w * 0.46f) * pulseScale
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
@@ -552,13 +820,19 @@ private fun ConnectionsHubGraphic(
             center = Offset(cx, cy)
         )
 
-        // Subtle orbital ring connecting satellites
-        val orbitRadius = w * 0.31f
+        // Subtle orbital rings connecting satellites
+        val orbitRadius = w * 0.33f
         drawCircle(
             color = WarmBorder.copy(alpha = 0.65f),
             radius = orbitRadius,
             center = Offset(cx, cy),
             style = Stroke(width = 1.5.dp.toPx())
+        )
+        drawCircle(
+            color = CoralPrimary.copy(alpha = 0.14f),
+            radius = orbitRadius * 0.62f,
+            center = Offset(cx, cy),
+            style = Stroke(width = 1.dp.toPx())
         )
 
         // 2. Satellite Integration Nodes (Google Health, Tasks, Finance, Facebook, Meta Key)
@@ -573,21 +847,37 @@ private fun ConnectionsHubGraphic(
 
         val dashEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f), 0f)
 
-        // Draw connection beams first so nodes sit cleanly on top
-        nodes.forEach { (nodePos, color, connected) ->
+        // Draw connection beams + traveling telemetry photons for connected channels
+        nodes.forEachIndexed { idx, (nodePos, color, connected) ->
             drawLine(
                 color = if (connected) color.copy(alpha = 0.70f) else SoftMutedText.copy(alpha = 0.30f),
                 start = Offset(cx, cy),
                 end = nodePos,
-                strokeWidth = if (connected) 3.5.dp.toPx() else 2.dp.toPx(),
+                strokeWidth = if (connected) 3.2.dp.toPx() else 1.8.dp.toPx(),
                 cap = StrokeCap.Round,
                 pathEffect = if (connected) null else dashEffect
             )
+
+            if (connected) {
+                val staggeredT = (photonProgress + idx * 0.2f) % 1f
+                val px = nodePos.x + (cx - nodePos.x) * staggeredT
+                val py = nodePos.y + (cy - nodePos.y) * staggeredT
+                drawCircle(
+                    color = color.copy(alpha = 0.35f),
+                    radius = 6.dp.toPx(),
+                    center = Offset(px, py)
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 3.dp.toPx(),
+                    center = Offset(px, py)
+                )
+            }
         }
 
         // Draw satellite circles
         nodes.forEach { (nodePos, color, connected) ->
-            val nodeR = 18.dp.toPx() * (if (connected) pulseScale else 0.95f)
+            val nodeR = 16.dp.toPx() * (if (connected) pulseScale else 0.92f)
             if (connected) {
                 drawCircle(
                     color = color.copy(alpha = 0.25f),
@@ -602,7 +892,7 @@ private fun ConnectionsHubGraphic(
             )
             drawCircle(
                 color = if (connected) Color.White else WarmBorder,
-                radius = if (connected) 6.dp.toPx() else nodeR,
+                radius = if (connected) 5.5.dp.toPx() else nodeR,
                 center = nodePos,
                 style = if (connected) androidx.compose.ui.graphics.drawscope.Fill else Stroke(width = 2.dp.toPx())
             )
@@ -627,7 +917,7 @@ private fun ConnectionsHubGraphic(
         )
         drawCircle(
             color = CoralPrimary,
-            radius = 8.dp.toPx(),
+            radius = 7.dp.toPx(),
             center = Offset(cx, cy)
         )
     }

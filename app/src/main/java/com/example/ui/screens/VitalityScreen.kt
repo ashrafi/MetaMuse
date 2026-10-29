@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -80,8 +81,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.cos
+import kotlin.math.sin
 import com.example.model.ChannelTelemetryReport
 import com.example.model.MemoryItem
 import com.example.model.MuseDemoScenario
@@ -153,7 +157,9 @@ fun VitalityScreen(
         if (!isFullScreen) {
             SimpleDataGraphicView(
                 telemetry = telemetry,
+                activeScenario = activeScenario,
                 contentPadding = contentPadding,
+                onSelectScenario = { viewModel.activateDemoScenario(it) },
                 onOpenFullData = { viewModel.setShowFullData(true) },
                 modifier = modifier
             )
@@ -811,40 +817,187 @@ fun VitalityScreen(
 @Composable
 private fun SimpleDataGraphicView(
     telemetry: SyntheticTelemetrySnapshot,
+    activeScenario: MuseDemoScenario,
     contentPadding: PaddingValues,
+    onSelectScenario: (MuseDemoScenario) -> Unit,
     onOpenFullData: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val compositeScore = (
+        telemetry.healthReport.scorePercent +
+            telemetry.tasksReport.scorePercent +
+            telemetry.financeReport.scorePercent +
+            telemetry.socialReport.scorePercent
+        ) / 4
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(BaseCanvas)
             .padding(
-                top = contentPadding.calculateTopPadding() + 16.dp,
-                bottom = contentPadding.calculateBottomPadding() + 16.dp,
-                start = 24.dp,
-                end = 24.dp
+                top = contentPadding.calculateTopPadding() + 10.dp,
+                bottom = contentPadding.calculateBottomPadding() + 12.dp,
+                start = 20.dp,
+                end = 20.dp
             )
             .testTag("simple_data_graphic_screen"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
+        // 1. Top Status Chip & Synthetic Dataset Switcher
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            SerenityStatusChip(
+                text = if (telemetry.deterministicTriggerActive) {
+                    "Anomaly Detected • ${activeScenario.title}"
+                } else {
+                    "4-Channel Bio-Telemetry • $compositeScore% Harmony"
+                },
+                pulseColor = if (telemetry.deterministicTriggerActive) SerenityError else MintSecondary
+            )
 
-        Box(
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val scenarios = listOf(
+                MuseDemoScenario.NONE to "Healthy",
+                MuseDemoScenario.SUCCESS_TRAP to "1. Success Trap",
+                MuseDemoScenario.INVISIBLE_MONEY_LEAK to "2. Money Leak",
+                MuseDemoScenario.CONNECTION_DEBT to "3. Connection Debt"
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(scenarios) { (scenario, shortLabel) ->
+                    val isSelected = activeScenario == scenario
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isSelected) CoralPrimary else FloatingSurface,
+                        modifier = Modifier
+                            .border(
+                                1.dp,
+                                if (isSelected) CoralPrimary else WarmBorder,
+                                CircleShape
+                            )
+                            .clip(CircleShape)
+                            .clickable { onSelectScenario(scenario) }
+                    ) {
+                        Text(
+                            text = shortLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (isSelected) Color.White else DeepEspresso,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 11.sp
+                            ),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Centerpiece: 4-Channel Concentric Radar Graphic + 2x2 Live Channel Tiles
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentAlignment = Alignment.Center
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly
         ) {
-            DataTelemetryGraphic(
-                telemetry = telemetry,
+            Box(
+                contentAlignment = Alignment.Center
+            ) {
+                DataTelemetryGraphic(
+                    telemetry = telemetry,
+                    modifier = Modifier
+                        .size(195.dp)
+                        .clickable(onClick = onOpenFullData)
+                )
+            }
+
+            // 2x2 Live Telemetry Channel Summary Grid
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CompactChannelTelemetryTile(
+                        report = telemetry.healthReport,
+                        icon = Icons.Default.Favorite,
+                        accentColor = MintSecondary,
+                        onClick = onOpenFullData,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompactChannelTelemetryTile(
+                        report = telemetry.tasksReport,
+                        icon = Icons.Default.TaskAlt,
+                        accentColor = SageAccent,
+                        onClick = onOpenFullData,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CompactChannelTelemetryTile(
+                        report = telemetry.financeReport,
+                        icon = Icons.Default.AccountBalance,
+                        accentColor = AmberTertiary,
+                        onClick = onOpenFullData,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompactChannelTelemetryTile(
+                        report = telemetry.socialReport,
+                        icon = Icons.Default.Groups,
+                        accentColor = CoralPrimary,
+                        onClick = onOpenFullData,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Deterministic Rule Trigger Strip
+            Box(
                 modifier = Modifier
-                    .size(300.dp)
-                    .clickable(onClick = onOpenFullData)
-            )
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (telemetry.deterministicTriggerActive) SerenityErrorContainer else MintContainer)
+                    .border(
+                        1.dp,
+                        if (telemetry.deterministicTriggerActive) SerenityError.copy(alpha = 0.35f) else MintSecondary.copy(alpha = 0.45f),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(horizontal = 12.dp, vertical = 9.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (telemetry.deterministicTriggerActive) Icons.Default.Warning else Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = if (telemetry.deterministicTriggerActive) SerenityError else DarkSageText,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = telemetry.triggeredRuleExplanation,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = if (telemetry.deterministicTriggerActive) SerenityError else DarkSageText,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
 
+        // 3. Bottom Navigation Button to Full Data Screen
         SerenityPrimaryButton(
             text = "Open Data & Telemetry",
             icon = Icons.Default.Analytics,
@@ -852,6 +1005,90 @@ private fun SimpleDataGraphicView(
             modifier = Modifier.fillMaxWidth(),
             testTag = "open_full_data_button"
         )
+    }
+}
+
+@Composable
+private fun CompactChannelTelemetryTile(
+    report: ChannelTelemetryReport,
+    icon: ImageVector,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val borderColor = if (report.isAlert) SerenityError.copy(alpha = 0.55f) else WarmBorder
+    val badgeBg = if (report.isAlert) SerenityErrorContainer else accentColor.copy(alpha = 0.14f)
+    val badgeTextCol = if (report.isAlert) SerenityError else DarkSageText
+
+    Box(
+        modifier = modifier
+            .shadow(3.dp, RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(FloatingSurface)
+            .border(1.dp, borderColor, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(badgeBg),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = if (report.isAlert) SerenityError else accentColor,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = report.channelName,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = DeepEspresso
+                        )
+                    )
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    color = badgeBg
+                ) {
+                    Text(
+                        text = "${report.scorePercent}%",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = badgeTextCol,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 10.sp
+                        ),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = report.headlineStatus,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = if (report.isAlert) SerenityError else WarmSlateCharcoal,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 10.sp
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -871,13 +1108,34 @@ private fun DataTelemetryGraphic(
         label = "DataAuraPulse"
     )
     val floatOffset by infiniteTransition.animateFloat(
-        initialValue = -7f,
-        targetValue = 7f,
+        initialValue = -5f,
+        targetValue = 5f,
         animationSpec = infiniteRepeatable(
             animation = tween(2800, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "DataFloatY"
+    )
+
+    val healthSweep by animateFloatAsState(
+        targetValue = telemetry.healthReport.scorePercent / 100f,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "HealthSweep"
+    )
+    val tasksSweep by animateFloatAsState(
+        targetValue = telemetry.tasksReport.scorePercent / 100f,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "TasksSweep"
+    )
+    val financeSweep by animateFloatAsState(
+        targetValue = telemetry.financeReport.scorePercent / 100f,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "FinanceSweep"
+    )
+    val socialSweep by animateFloatAsState(
+        targetValue = telemetry.socialReport.scorePercent / 100f,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "SocialSweep"
     )
 
     Canvas(modifier = modifier) {
@@ -889,7 +1147,7 @@ private fun DataTelemetryGraphic(
 
         // 1. Soft Ambient Aura
         val auraColor = if (isAlert) SerenityError else MintSecondary
-        val auraRadius = (w * 0.46f) * pulseScale
+        val auraRadius = (w * 0.48f) * pulseScale
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
@@ -906,27 +1164,28 @@ private fun DataTelemetryGraphic(
 
         // 2. Four Concentric Bio-Telemetry Rings (Health, Tasks, Finance, Social)
         val channels = listOf(
-            Triple(telemetry.healthReport.scorePercent / 100f, MintSecondary, telemetry.healthReport.isAlert),
-            Triple(telemetry.tasksReport.scorePercent / 100f, SageAccent, telemetry.tasksReport.isAlert),
-            Triple(telemetry.financeReport.scorePercent / 100f, AmberTertiary, telemetry.financeReport.isAlert),
-            Triple(telemetry.socialReport.scorePercent / 100f, CoralPrimary, telemetry.socialReport.isAlert)
+            Triple(healthSweep, MintSecondary, telemetry.healthReport.isAlert),
+            Triple(tasksSweep, SageAccent, telemetry.tasksReport.isAlert),
+            Triple(financeSweep, AmberTertiary, telemetry.financeReport.isAlert),
+            Triple(socialSweep, CoralPrimary, telemetry.socialReport.isAlert)
         )
 
-        val strokeWidth = 11.dp.toPx()
-        val ringGap = 17.dp.toPx()
-        val outerRadius = w * 0.38f
+        val strokeWidth = 9.dp.toPx()
+        val ringGap = 13.dp.toPx()
+        val outerRadius = w * 0.40f
 
         channels.forEachIndexed { idx, (progress, baseColor, channelAlert) ->
             val r = outerRadius - (idx * ringGap)
             val topLeft = Offset(cx - r, cy - r)
             val arcSize = Size(r * 2f, r * 2f)
             val activeColor = if (channelAlert) SerenityError else baseColor
+            val sweepDeg = 260f * progress.coerceIn(0.12f, 1f)
 
             // Subtle track ring
             drawArc(
                 color = WarmBorder.copy(alpha = 0.45f),
-                startAngle = -215f,
-                sweepAngle = 250f,
+                startAngle = -220f,
+                sweepAngle = 260f,
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcSize,
@@ -936,17 +1195,27 @@ private fun DataTelemetryGraphic(
             // Active telemetry sweep arc
             drawArc(
                 color = activeColor,
-                startAngle = -215f,
-                sweepAngle = 250f * progress.coerceIn(0.12f, 1f),
+                startAngle = -220f,
+                sweepAngle = sweepDeg,
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcSize,
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
+
+            // Glowing endpoint dot at the tip of the arc
+            val endAngleRad = Math.toRadians((-220f + sweepDeg).toDouble())
+            val tipX = cx + (r * cos(endAngleRad)).toFloat()
+            val tipY = cy + (r * sin(endAngleRad)).toFloat()
+            drawCircle(
+                color = Color.White,
+                radius = 2.8.dp.toPx(),
+                center = Offset(tipX, tipY)
+            )
         }
 
         // 3. Central Luminous Pulse Core + Sleep Waveform
-        val coreRadius = (w * 0.14f) * pulseScale
+        val coreRadius = (w * 0.15f) * pulseScale
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
@@ -981,7 +1250,7 @@ private fun DataTelemetryGraphic(
             drawPath(
                 path = wavePath,
                 color = if (isAlert) SerenityError else CoralPrimary,
-                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                style = Stroke(width = 2.8.dp.toPx(), cap = StrokeCap.Round)
             )
         }
     }
