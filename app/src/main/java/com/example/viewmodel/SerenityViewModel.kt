@@ -6,10 +6,13 @@ import com.example.data.SerenityRepository
 import com.example.model.CareActionLog
 import com.example.model.ChatMessage
 import com.example.model.DailyRhythmBlock
+import com.example.model.DemoRecoveryStage
 import com.example.model.LifeQuest
 import com.example.model.MemoryItem
+import com.example.model.MuseDemoScenario
 import com.example.model.PresenceMode
 import com.example.model.ScreenNav
+import com.example.model.SyntheticTelemetrySnapshot
 import com.example.model.TamagotchiState
 import com.example.model.ThoughtStream
 import com.example.model.VitalityCheckin
@@ -26,7 +29,18 @@ class SerenityViewModel(
     private val _currentScreen = MutableStateFlow(ScreenNav.ATTUNE)
     val currentScreen: StateFlow<ScreenNav> = _currentScreen.asStateFlow()
 
+    private val _showFullHome = MutableStateFlow(false)
+    val showFullHome: StateFlow<Boolean> = _showFullHome.asStateFlow()
+
+    fun setShowFullHome(show: Boolean) {
+        _showFullHome.value = show
+    }
+
     val tamagotchiState: StateFlow<TamagotchiState> = repository.tamagotchiState
+    val activeDemoScenario: StateFlow<MuseDemoScenario> = repository.activeDemoScenario
+    val demoRecoveryStage: StateFlow<DemoRecoveryStage> = repository.demoRecoveryStage
+    val telemetrySnapshot: StateFlow<SyntheticTelemetrySnapshot> = repository.telemetrySnapshot
+
     val careLogs: StateFlow<List<CareActionLog>> = repository.careLogs
     val lifeQuests: StateFlow<List<LifeQuest>> = repository.lifeQuests
 
@@ -42,6 +56,14 @@ class SerenityViewModel(
     val metaAiConfig = repository.metaAiConfig
     val latestMuseAdvice = repository.latestMuseAdvice
     val integrations = repository.integrations
+
+    fun activateDemoScenario(scenario: MuseDemoScenario) {
+        repository.activateDemoScenario(scenario)
+    }
+
+    fun completeDemoFollowThrough() {
+        repository.completeDemoFollowThrough()
+    }
 
     fun toggleGoogleHealth() {
         repository.toggleGoogleHealth()
@@ -129,6 +151,9 @@ class SerenityViewModel(
     }
 
     fun navigateTo(screen: ScreenNav) {
+        if (screen == ScreenNav.HOME || screen == ScreenNav.ATTUNE) {
+            _showFullHome.value = false
+        }
         _currentScreen.value = screen
     }
 
@@ -145,7 +170,6 @@ class SerenityViewModel(
     }
 
     fun sendQuickPrompt(promptText: String) {
-        _currentScreen.value = ScreenNav.DIALOGUE
         repository.sendMessage(promptText)
     }
 

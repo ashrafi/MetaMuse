@@ -26,11 +26,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Spa
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -51,9 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.model.ScreenNav
 import com.example.ui.screens.AttuneScreen
-import com.example.ui.screens.DialogueScreen
 import com.example.ui.screens.PresenceScreen
-import com.example.ui.screens.VaultScreen
 import com.example.ui.screens.VitalityScreen
 import com.example.ui.theme.BaseCanvas
 import com.example.ui.theme.CoralPrimary
@@ -61,7 +57,6 @@ import com.example.ui.theme.DeepEspresso
 import com.example.ui.theme.FloatingSurface
 import com.example.ui.theme.SerenityTheme
 import com.example.ui.theme.SoftMutedText
-import com.example.ui.theme.SubtleContainer
 import com.example.ui.theme.WarmBorder
 import com.example.viewmodel.SerenityViewModel
 
@@ -81,8 +76,12 @@ class MainActivity : ComponentActivity() {
 fun SerenityMainApp(viewModel: SerenityViewModel = viewModel()) {
     val currentScreen by viewModel.currentScreen.collectAsState()
 
-    // Handle Android system back press to return to Attune (Home)
-    if (currentScreen != ScreenNav.ATTUNE) {
+    val isHomeTab = currentScreen == ScreenNav.HOME ||
+        currentScreen == ScreenNav.ATTUNE ||
+        currentScreen == ScreenNav.DIALOGUE
+
+    // Handle Android system back press to return to Home
+    if (!isHomeTab) {
         BackHandler {
             viewModel.navigateTo(ScreenNav.ATTUNE)
         }
@@ -107,23 +106,15 @@ fun SerenityMainApp(viewModel: SerenityViewModel = viewModel()) {
             label = "ScreenTransition"
         ) { target ->
             when (target) {
-                ScreenNav.ATTUNE -> AttuneScreen(
+                ScreenNav.HOME, ScreenNav.ATTUNE, ScreenNav.DIALOGUE -> AttuneScreen(
                     viewModel = viewModel,
                     contentPadding = innerPadding
                 )
-                ScreenNav.DIALOGUE -> DialogueScreen(
+                ScreenNav.DATA, ScreenNav.VITALITY, ScreenNav.VAULT -> VitalityScreen(
                     viewModel = viewModel,
                     contentPadding = innerPadding
                 )
-                ScreenNav.VITALITY -> VitalityScreen(
-                    viewModel = viewModel,
-                    contentPadding = innerPadding
-                )
-                ScreenNav.VAULT -> VaultScreen(
-                    viewModel = viewModel,
-                    contentPadding = innerPadding
-                )
-                ScreenNav.PRESENCE -> PresenceScreen(
+                ScreenNav.CONNECTIONS, ScreenNav.PRESENCE -> PresenceScreen(
                     viewModel = viewModel,
                     contentPadding = innerPadding
                 )
@@ -133,7 +124,10 @@ fun SerenityMainApp(viewModel: SerenityViewModel = viewModel()) {
 }
 
 /**
- * Floating Pill Luminous Navigation Bar with soft tactility & frosted appearance
+ * 3-Tab Floating Pill Luminous Navigation Bar:
+ * 1. Home (Tamagotchi + Proactive Dialogue)
+ * 2. Show Data (Health, Tasks, Finance, Social, Values)
+ * 3. Connections (Google Health, Tasks, Finance App, Facebook, Meta Key)
  */
 @Composable
 fun SerenityBottomNavBar(
@@ -142,11 +136,20 @@ fun SerenityBottomNavBar(
 ) {
     val navShape = RoundedCornerShape(32.dp)
 
+    val isHomeSelected = currentScreen == ScreenNav.HOME ||
+        currentScreen == ScreenNav.ATTUNE ||
+        currentScreen == ScreenNav.DIALOGUE
+    val isDataSelected = currentScreen == ScreenNav.DATA ||
+        currentScreen == ScreenNav.VITALITY ||
+        currentScreen == ScreenNav.VAULT
+    val isConnectionsSelected = currentScreen == ScreenNav.CONNECTIONS ||
+        currentScreen == ScreenNav.PRESENCE
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -160,48 +163,34 @@ fun SerenityBottomNavBar(
                 .clip(navShape)
                 .background(FloatingSurface.copy(alpha = 0.95f))
                 .border(1.dp, WarmBorder, navShape)
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
                 .testTag("serenity_bottom_navigation_bar")
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterHorically
             ) {
                 NavBarItem(
-                    label = "Tamagotchi",
+                    label = "Home",
                     icon = Icons.Default.Spa,
-                    isSelected = currentScreen == ScreenNav.ATTUNE,
+                    isSelected = isHomeSelected,
                     onClick = { onScreenSelected(ScreenNav.ATTUNE) },
-                    testTag = "nav_tamagotchi"
+                    testTag = "nav_home"
                 )
                 NavBarItem(
-                    label = "Dialogue",
-                    icon = Icons.Default.GraphicEq,
-                    isSelected = currentScreen == ScreenNav.DIALOGUE,
-                    onClick = { onScreenSelected(ScreenNav.DIALOGUE) },
-                    testTag = "nav_dialogue"
+                    label = "Show Data",
+                    icon = Icons.Default.Analytics,
+                    isSelected = isDataSelected,
+                    onClick = { onScreenSelected(ScreenNav.DATA) },
+                    testTag = "nav_data"
                 )
                 NavBarItem(
-                    label = "Vitality",
-                    icon = Icons.Default.SelfImprovement,
-                    isSelected = currentScreen == ScreenNav.VITALITY,
-                    onClick = { onScreenSelected(ScreenNav.VITALITY) },
-                    testTag = "nav_vitality"
-                )
-                NavBarItem(
-                    label = "Vault",
-                    icon = Icons.Default.Bookmark,
-                    isSelected = currentScreen == ScreenNav.VAULT,
-                    onClick = { onScreenSelected(ScreenNav.VAULT) },
-                    testTag = "nav_vault"
-                )
-                NavBarItem(
-                    label = "Settings",
-                    icon = Icons.Default.Tune,
-                    isSelected = currentScreen == ScreenNav.PRESENCE,
-                    onClick = { onScreenSelected(ScreenNav.PRESENCE) },
-                    testTag = "nav_settings"
+                    label = "Connections",
+                    icon = Icons.Default.Hub,
+                    isSelected = isConnectionsSelected,
+                    onClick = { onScreenSelected(ScreenNav.CONNECTIONS) },
+                    testTag = "nav_connections"
                 )
             }
         }
@@ -233,7 +222,7 @@ private fun NavBarItem(
             modifier = Modifier
                 .clip(pillShape)
                 .background(background)
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .padding(horizontal = 20.dp, vertical = 6.dp)
         ) {
             Icon(
                 imageVector = icon,
@@ -245,7 +234,7 @@ private fun NavBarItem(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = contentColor
                 )
