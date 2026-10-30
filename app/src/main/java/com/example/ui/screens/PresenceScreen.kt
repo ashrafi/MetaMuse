@@ -1,8 +1,12 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -36,14 +40,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
@@ -52,8 +61,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -72,6 +79,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -79,9 +87,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.example.model.LifeSyncIntegrations
 import com.example.model.MuseLifeAdvice
+import com.example.model.RealConnectorState
 import com.example.ui.components.SerenityCard
+import com.example.ui.components.SerenityPillChip
 import com.example.ui.components.SerenityPrimaryButton
 import com.example.ui.components.SerenitySecondaryButton
 import com.example.ui.components.SerenityStatusChip
@@ -96,6 +107,8 @@ import com.example.ui.theme.MintContainer
 import com.example.ui.theme.MintSecondary
 import com.example.ui.theme.RecessedContainer
 import com.example.ui.theme.SageAccent
+import com.example.ui.theme.SerenityError
+import com.example.ui.theme.SerenityErrorContainer
 import com.example.ui.theme.SoftMutedText
 import com.example.ui.theme.SubtleContainer
 import com.example.ui.theme.WarmBorder
@@ -108,15 +121,116 @@ fun PresenceScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val showFullConnections by viewModel.showFullConnections.collectAsState()
     val metaAiConfig by viewModel.metaAiConfig.collectAsState()
     val latestMuseAdvice by viewModel.latestMuseAdvice.collectAsState()
     val isSyncingWithMuse by viewModel.isSyncingWithMuse.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
+    val realState by viewModel.realConnectorState.collectAsState()
 
     var tokenInput by remember(metaAiConfig.token) { mutableStateOf(metaAiConfig.token) }
     var isTokenVisible by remember { mutableStateOf(false) }
     var showTokenSavedMessage by remember { mutableStateOf(false) }
+
+    var googleTasksTokenInput by remember(realState.googleTasksToken) {
+        mutableStateOf(realState.googleTasksToken)
+    }
+    var fbAppIdInput by remember(realState.facebookAppId) {
+        mutableStateOf(realState.facebookAppId)
+    }
+    var fbTokenInput by remember(realState.facebookAccessToken) {
+        mutableStateOf(realState.facebookAccessToken)
+    }
+    var bankTab by remember { mutableStateOf("Plaid API") }
+    var plaidClientIdInput by remember(realState.plaidClientId) {
+        mutableStateOf(realState.plaidClientId)
+    }
+    var plaidSecretInput by remember(realState.plaidSecret) {
+        mutableStateOf(realState.plaidSecret)
+    }
+    var plaidEnvInput by remember(realState.plaidEnvironment) {
+        mutableStateOf(realState.plaidEnvironment)
+    }
+    var plaidAccessTokenInput by remember(realState.plaidAccessToken) {
+        mutableStateOf(realState.plaidAccessToken)
+    }
+    var simpleFinInput by remember(realState.simpleFinUrlOrToken) {
+        mutableStateOf(realState.simpleFinUrlOrToken)
+    }
+
+    // 1. Real Android Health Connect + Activity Recognition Launchers
+    val activityRecognitionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+        viewModel.syncRealHealth()
+    }
+
+    val healthPermissionLauncher = rememberLauncherForActivityResult(
+        contract = remember { viewModel.createHealthPermissionContract() }
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED
+        ) {
+            activityRecognitionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        } else {
+            viewModel.syncRealHealth()
+        }
+    }
+
+    val requestRealHealthConnect: () -> Unit = {
+        if (realState.healthSdkAvailable) {
+            try {
+                healthPermissionLauncher.launch(viewModel.healthConnectPermissions)
+            } catch (_: Exception) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    activityRecognitionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                } else {
+                    viewModel.openHealthConnectSettings()
+                }
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            activityRecognitionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        } else {
+            viewModel.openHealthConnectSettings()
+        }
+    }
+
+    // 2. Real Android Calendar Permission Launcher
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        viewModel.syncRealCalendarAndTasks()
+    }
+
+    val requestRealCalendar: () -> Unit = {
+        calendarPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.READ_CALENDAR,
+                Manifest.permission.WRITE_CALENDAR
+            )
+        )
+    }
+
+    // 3. Real Android Contacts Permission Launcher (Close Circle & Birthdays)
+    val contactsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+        viewModel.syncRealFacebookAndContacts()
+    }
+
+    val requestRealContacts: () -> Unit = {
+        contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+    }
+
+    // 4. Real Bank .CSV Statement Picker Launcher
+    val bankCsvPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importRealBankCsv(uri)
+        }
+    }
 
     if (showFullConnections) {
         BackHandler {
@@ -133,12 +247,18 @@ fun PresenceScreen(
             SimpleConnectionsGraphicView(
                 integrations = integrations,
                 isMetaKeyConnected = metaAiConfig.token.isNotBlank(),
-                isSyncingWithMuse = isSyncingWithMuse,
+                isSyncingWithMuse = isSyncingWithMuse || realState.isSyncing,
                 contentPadding = contentPadding,
-                onToggleGoogleHealth = { viewModel.toggleGoogleHealth() },
-                onToggleTasks = { viewModel.toggleTasksApp() },
-                onToggleFinance = { viewModel.toggleFinanceApp() },
-                onToggleFacebook = { viewModel.toggleFacebook() },
+                onConnectGoogleHealth = requestRealHealthConnect,
+                onConnectCalendarTasks = requestRealCalendar,
+                onConnectFinance = { viewModel.setShowFullConnections(true) },
+                onConnectFacebook = {
+                    if (!realState.contactsPermissionGranted && realState.facebookAccessToken.isBlank()) {
+                        viewModel.setShowFullConnections(true)
+                    } else {
+                        viewModel.syncRealFacebookAndContacts()
+                    }
+                },
                 onSyncToMuse = { viewModel.sendAllInfoToMuse() },
                 onOpenFullConnections = { viewModel.setShowFullConnections(true) },
                 modifier = modifier
@@ -157,10 +277,11 @@ fun PresenceScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Top Back Button
+                // Top Back Button + Re-Sync All Button
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
@@ -184,9 +305,38 @@ fun PresenceScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Back to Connections",
+                                    text = "Back to Constellation",
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         color = DeepEspresso,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = CircleShape,
+                            color = MintContainer,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { viewModel.syncAllRealChannels() }
+                                .testTag("resync_all_real_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Sync All",
+                                    tint = DarkSageText,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = if (realState.isSyncing) "Syncing..." else "Sync All Live",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = DarkSageText,
                                         fontWeight = FontWeight.Bold
                                     )
                                 )
@@ -195,16 +345,16 @@ fun PresenceScreen(
                     }
                 }
 
-                // Settings Header
+                // Settings Header + Live Sync Status Banner
                 item {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         SerenityStatusChip(
-                            text = "Life Telemetry & Integrations",
-                            pulseColor = CoralPrimary
+                            text = realState.lastSyncSummary,
+                            pulseColor = if (realState.isSyncing) AmberTertiary else MintSecondary
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "Setup Connections",
+                            text = "Real Data Connections",
                             style = MaterialTheme.typography.headlineLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = DeepEspresso
@@ -212,245 +362,296 @@ fun PresenceScreen(
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "Connect Google Health, Tasks, Finance App, Facebook, and your Meta AI Key to feed Muse.",
+                            text = "Live Android Health Connect, Device Calendar & Google Tasks API, Facebook Graph v21.0, and Plaid / SimpleFIN / Bank CSV.",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 color = WarmSlateCharcoal
                             )
                         )
-                    }
-                }
 
-        // Section 1: Meta Key
-        item {
-            SerenityCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("section_meta_key")
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        realState.lastError?.let { err ->
+                            Spacer(modifier = Modifier.height(8.dp))
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(CoralPrimary.copy(alpha = 0.14f)),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(SerenityErrorContainer)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Key,
-                                    contentDescription = null,
-                                    tint = CoralPrimary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
                                 Text(
-                                    text = "Meta Key",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = DeepEspresso
-                                    )
-                                )
-                                Text(
-                                    text = "Meta AI & Muse Intelligence",
+                                    text = err,
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        color = WarmSlateCharcoal
+                                        color = SerenityError,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 )
                             }
                         }
-
-                        Surface(
-                            shape = CircleShape,
-                            color = if (metaAiConfig.token.isNotBlank()) MintContainer else SubtleContainer
-                        ) {
-                            Text(
-                                text = if (metaAiConfig.token.isNotBlank()) "Key Connected" else "Key Needed",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = if (metaAiConfig.token.isNotBlank()) DarkSageText else WarmSlateCharcoal,
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Enter your Meta AI Token. All your Tamagotchi vitals, habits, and life telemetry will be sent to Muse to synthesize personalized life advice.",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = WarmSlateCharcoal,
-                            lineHeight = 20.sp
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    OutlinedTextField(
-                        value = tokenInput,
-                        onValueChange = { tokenInput = it },
-                        label = { Text("Meta AI Token") },
-                        placeholder = { Text("Paste your Meta AI Bearer Token") },
-                        singleLine = true,
-                        visualTransformation = if (isTokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { isTokenVisible = !isTokenVisible }) {
-                                Icon(
-                                    imageVector = if (isTokenVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (isTokenVisible) "Hide token" else "Show token",
-                                    tint = WarmSlateCharcoal
-                                )
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("meta_key_input"),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CoralHoverGlow,
-                            unfocusedBorderColor = WarmBorder,
-                            focusedContainerColor = FloatingSurface,
-                            unfocusedContainerColor = SubtleContainer
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        SerenitySecondaryButton(
-                            text = "Save Key",
-                            icon = Icons.Default.Check,
-                            onClick = {
-                                viewModel.updateMetaAiToken(tokenInput)
-                                showTokenSavedMessage = true
-                            },
-                            modifier = Modifier.weight(1f),
-                            testTag = "save_meta_key_button"
-                        )
-
-                        SerenityPrimaryButton(
-                            text = if (isSyncingWithMuse) "Transmitting..." else "Send to Muse",
-                            icon = Icons.Default.Sync,
-                            onClick = { viewModel.sendAllInfoToMuse() },
-                            modifier = Modifier.weight(1.3f),
-                            testTag = "send_to_muse_button"
-                        )
-                    }
-
-                    if (showTokenSavedMessage) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MintContainer)
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = DarkSageText,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Meta Key saved securely.",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = DarkSageText,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-                    }
-
-                    if (metaAiConfig.lastSyncedAt != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Last synced with Muse: ${metaAiConfig.lastSyncedAt}",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = SoftMutedText,
-                                fontSize = 11.sp
-                            )
-                        )
                     }
                 }
-            }
-        }
 
-        // Section 2: Connect to Google Health
-        item {
-            IntegrationSettingCard(
-                title = "Connect to Google Health",
-                category = "Health & Physical Vitality",
-                description = "Synchronizes your daily step count, sleep duration, and hydration metrics directly into Lumi's physical energy and hydration vitals.",
-                statsText = integrations.googleHealthStats,
-                isConnected = integrations.googleHealthConnected,
-                icon = Icons.Default.Favorite,
-                accentColor = MintSecondary,
-                onToggle = { viewModel.toggleGoogleHealth() },
-                testTag = "section_google_health"
-            )
-        }
+                // =============================================================
+                // 1. REAL GOOGLE HEALTH CONNECT + STEP SENSOR CARD
+                // =============================================================
+                item {
+                    RealGoogleHealthCard(
+                        isConnected = integrations.googleHealthConnected,
+                        statsText = integrations.googleHealthStats,
+                        realState = realState,
+                        onGrantAndSync = requestRealHealthConnect,
+                        onOpenHealthConnect = { viewModel.openHealthConnectSettings() }
+                    )
+                }
 
-        // Section 3: Connect to Facebook
-        item {
-            IntegrationSettingCard(
-                title = "Connect to Facebook",
-                category = "Social Connection & Circles",
-                description = "Bridges close friend milestones, community check-ins, and shared moments to nurture Lumi's social connection vital.",
-                statsText = integrations.facebookStats,
-                isConnected = integrations.facebookConnected,
-                icon = Icons.Default.Groups,
-                accentColor = CoralPrimary,
-                onToggle = { viewModel.toggleFacebook() },
-                testTag = "section_facebook"
-            )
-        }
+                // =============================================================
+                // 2. REAL CALENDAR & GOOGLE TASKS CARD
+                // =============================================================
+                item {
+                    RealCalendarAndTasksCard(
+                        isConnected = integrations.tasksAppConnected,
+                        statsText = integrations.tasksAppStats,
+                        calendarGranted = realState.calendarPermissionGranted,
+                        googleTasksToken = googleTasksTokenInput,
+                        onTasksTokenChange = { googleTasksTokenInput = it },
+                        onGrantCalendar = requestRealCalendar,
+                        onSyncGoogleTasks = {
+                            viewModel.syncRealCalendarAndTasks(googleTasksTokenInput)
+                        },
+                        onInsertRecoveryBlock = {
+                            viewModel.insertRecoveryCalendarEvent(
+                                title = "Muse Restorative Wind-Down",
+                                description = "Protected evening recovery window created from MetaMuse"
+                            )
+                        }
+                    )
+                }
 
-        // Section 4: Connect to Finance App
-        item {
-            IntegrationSettingCard(
-                title = "Connect to Finance App",
-                category = "Financial Peace & Clarity",
-                description = "Monitors daily budget health and peace of mind metrics, removing financial anxiety and feeding your inner peace vital.",
-                statsText = integrations.financeAppStats,
-                isConnected = integrations.financeAppConnected,
-                icon = Icons.Default.AccountBalance,
-                accentColor = AmberTertiary,
-                onToggle = { viewModel.toggleFinanceApp() },
-                testTag = "section_finance_app"
-            )
-        }
+                // =============================================================
+                // 3. REAL FACEBOOK GRAPH API + CLOSE CONTACTS CARD
+                // =============================================================
+                item {
+                    RealFacebookSocialCard(
+                        isConnected = integrations.facebookConnected,
+                        statsText = integrations.facebookStats,
+                        contactsGranted = realState.contactsPermissionGranted,
+                        facebookAppId = fbAppIdInput,
+                        onAppIdChange = { fbAppIdInput = it },
+                        facebookToken = fbTokenInput,
+                        onTokenChange = { fbTokenInput = it },
+                        onLaunchOAuth = { viewModel.launchFacebookOAuth(fbAppIdInput) },
+                        onVerifyGraphToken = {
+                            viewModel.syncRealFacebookAndContacts(
+                                facebookAccessToken = fbTokenInput,
+                                facebookAppId = fbAppIdInput
+                            )
+                        },
+                        onGrantContacts = requestRealContacts
+                    )
+                }
 
-        // Section 5: Connect to Tasks App
-        item {
-            IntegrationSettingCard(
-                title = "Connect to Tasks App",
-                category = "Focus Flow & Productivity",
-                description = "Connects Google Tasks or Todoist. Completed tasks directly advance your daily Life Quests and elevate Lumi's Mind & Focus flow.",
-                statsText = integrations.tasksAppStats,
-                isConnected = integrations.tasksAppConnected,
-                icon = Icons.Default.TaskAlt,
-                accentColor = SageAccent,
-                onToggle = { viewModel.toggleTasksApp() },
-                testTag = "section_tasks_app"
-            )
-        }
+                // =============================================================
+                // 4. REAL BANK / FINANCE CONNECTOR CARD (Plaid + SimpleFIN + CSV)
+                // =============================================================
+                item {
+                    RealBankFinanceCard(
+                        isConnected = integrations.financeAppConnected,
+                        statsText = integrations.financeAppStats,
+                        selectedTab = bankTab,
+                        onSelectTab = { bankTab = it },
+                        plaidClientId = plaidClientIdInput,
+                        onPlaidClientIdChange = { plaidClientIdInput = it },
+                        plaidSecret = plaidSecretInput,
+                        onPlaidSecretChange = { plaidSecretInput = it },
+                        plaidEnv = plaidEnvInput,
+                        onPlaidEnvChange = { plaidEnvInput = it },
+                        plaidAccessToken = plaidAccessTokenInput,
+                        onPlaidAccessTokenChange = { plaidAccessTokenInput = it },
+                        onConnectPlaid = {
+                            viewModel.connectPlaidBank(
+                                clientId = plaidClientIdInput,
+                                secret = plaidSecretInput,
+                                environment = plaidEnvInput,
+                                accessToken = plaidAccessTokenInput
+                            )
+                        },
+                        simpleFinInput = simpleFinInput,
+                        onSimpleFinChange = { simpleFinInput = it },
+                        onConnectSimpleFin = {
+                            viewModel.connectSimpleFinBank(simpleFinInput)
+                        },
+                        onPickBankCsv = {
+                            bankCsvPickerLauncher.launch("*/*")
+                        }
+                    )
+                }
+
+                // =============================================================
+                // 5. META AI KEY & MUSE SUPERINTELLIGENCE CARD
+                // =============================================================
+                item {
+                    SerenityCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("section_meta_key")
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(CoralPrimary.copy(alpha = 0.14f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Key,
+                                            contentDescription = null,
+                                            tint = CoralPrimary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "Meta Key",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = DeepEspresso
+                                            )
+                                        )
+                                        Text(
+                                            text = "Meta AI & Muse Intelligence",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = WarmSlateCharcoal
+                                            )
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (metaAiConfig.token.isNotBlank()) MintContainer else SubtleContainer
+                                ) {
+                                    Text(
+                                        text = if (metaAiConfig.token.isNotBlank()) "Key Connected" else "Key Needed",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = if (metaAiConfig.token.isNotBlank()) DarkSageText else WarmSlateCharcoal,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                text = "Enter your Meta AI Token to transmit all live synced Health, Calendar, Facebook, and Bank telemetry to Muse.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = WarmSlateCharcoal,
+                                    lineHeight = 20.sp
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            OutlinedTextField(
+                                value = tokenInput,
+                                onValueChange = { tokenInput = it },
+                                label = { Text("Meta AI Token") },
+                                placeholder = { Text("Paste your Meta AI Bearer Token") },
+                                singleLine = true,
+                                visualTransformation = if (isTokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                trailingIcon = {
+                                    IconButton(onClick = { isTokenVisible = !isTokenVisible }) {
+                                        Icon(
+                                            imageVector = if (isTokenVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = if (isTokenVisible) "Hide token" else "Show token",
+                                            tint = WarmSlateCharcoal
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("meta_key_input"),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = connectorTextFieldColors()
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                SerenitySecondaryButton(
+                                    text = "Save Key",
+                                    icon = Icons.Default.Check,
+                                    onClick = {
+                                        viewModel.updateMetaAiToken(tokenInput)
+                                        showTokenSavedMessage = true
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    testTag = "save_meta_key_button"
+                                )
+
+                                SerenityPrimaryButton(
+                                    text = if (isSyncingWithMuse) "Transmitting..." else "Send to Muse",
+                                    icon = Icons.Default.Sync,
+                                    onClick = { viewModel.sendAllInfoToMuse() },
+                                    modifier = Modifier.weight(1.3f),
+                                    testTag = "send_to_muse_button"
+                                )
+                            }
+
+                            if (showTokenSavedMessage) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MintContainer)
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = DarkSageText,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Meta Key saved securely.",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = DarkSageText,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+
+                            if (metaAiConfig.lastSyncedAt != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Last synced with Muse: ${metaAiConfig.lastSyncedAt}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = SoftMutedText,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
 
                 // Latest Muse Life Advice Card (When present)
                 latestMuseAdvice?.let { advice ->
@@ -464,15 +665,567 @@ fun PresenceScreen(
 }
 
 @Composable
+private fun RealGoogleHealthCard(
+    isConnected: Boolean,
+    statsText: String,
+    realState: RealConnectorState,
+    onGrantAndSync: () -> Unit,
+    onOpenHealthConnect: () -> Unit
+) {
+    SerenityCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("section_google_health")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            ConnectorHeaderRow(
+                title = "Google Health Data",
+                category = "Android Health Connect + Step Sensor",
+                isConnected = isConnected,
+                icon = Icons.Default.Favorite,
+                accentColor = MintSecondary
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Reads real daily steps, 7-day sleep sessions, resting/average heart rate, and hydration records directly from Android Health Connect & hardware step sensors.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = WarmSlateCharcoal,
+                    lineHeight = 19.sp
+                )
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+            ConnectorLiveStatusBox(isConnected = isConnected, statsText = statsText, accentColor = MintSecondary)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SerenityPrimaryButton(
+                    text = if (isConnected) "Re-Sync Health" else "Connect Health",
+                    icon = Icons.Default.Favorite,
+                    onClick = onGrantAndSync,
+                    modifier = Modifier.weight(1.25f),
+                    testTag = "connect_google_health_button"
+                )
+                SerenitySecondaryButton(
+                    text = if (realState.healthSdkAvailable) "Manage" else "Install App",
+                    icon = Icons.Default.OpenInNew,
+                    onClick = onOpenHealthConnect,
+                    modifier = Modifier.weight(0.95f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RealCalendarAndTasksCard(
+    isConnected: Boolean,
+    statsText: String,
+    calendarGranted: Boolean,
+    googleTasksToken: String,
+    onTasksTokenChange: (String) -> Unit,
+    onGrantCalendar: () -> Unit,
+    onSyncGoogleTasks: () -> Unit,
+    onInsertRecoveryBlock: () -> Unit
+) {
+    SerenityCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("section_tasks_app")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            ConnectorHeaderRow(
+                title = "Calendar & Tasks List",
+                category = "Android CalendarContract + Google Tasks API v1",
+                isConnected = isConnected,
+                icon = Icons.Default.TaskAlt,
+                accentColor = SageAccent
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Queries real device calendar instances (completed today, upcoming 7-day events, late-night work past 9:30 PM, and declined RSVPs) plus optional Google Tasks REST API.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = WarmSlateCharcoal,
+                    lineHeight = 19.sp
+                )
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+            ConnectorLiveStatusBox(isConnected = isConnected, statsText = statsText, accentColor = SageAccent)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SerenityPrimaryButton(
+                    text = if (calendarGranted) "Re-Sync Calendar" else "Connect Calendar",
+                    icon = Icons.Default.CalendarMonth,
+                    onClick = onGrantCalendar,
+                    modifier = Modifier.weight(1.25f),
+                    testTag = "connect_calendar_button"
+                )
+                SerenitySecondaryButton(
+                    text = "+ Rest Event",
+                    onClick = onInsertRecoveryBlock,
+                    modifier = Modifier.weight(0.95f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = googleTasksToken,
+                onValueChange = onTasksTokenChange,
+                label = { Text("Google Tasks OAuth Token (Optional)") },
+                placeholder = { Text("ya29.a0... (tasks.readonly scope)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = connectorTextFieldColors()
+            )
+
+            if (googleTasksToken.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                SerenitySecondaryButton(
+                    text = "Sync Google Tasks REST API",
+                    icon = Icons.Default.Sync,
+                    onClick = onSyncGoogleTasks,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RealFacebookSocialCard(
+    isConnected: Boolean,
+    statsText: String,
+    contactsGranted: Boolean,
+    facebookAppId: String,
+    onAppIdChange: (String) -> Unit,
+    facebookToken: String,
+    onTokenChange: (String) -> Unit,
+    onLaunchOAuth: () -> Unit,
+    onVerifyGraphToken: () -> Unit,
+    onGrantContacts: () -> Unit
+) {
+    SerenityCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("section_facebook")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            ConnectorHeaderRow(
+                title = "Facebook & Close Circle",
+                category = "Facebook Graph API v21.0 + Android Contacts",
+                isConnected = isConnected,
+                icon = Icons.Default.Groups,
+                accentColor = CoralPrimary
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Connect via Facebook OAuth / Graph API v21.0 (profile, friends count, attending & declined events) and/or sync starred close-circle contacts & birthdays from your phone.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = WarmSlateCharcoal,
+                    lineHeight = 19.sp
+                )
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+            ConnectorLiveStatusBox(isConnected = isConnected, statsText = statsText, accentColor = CoralPrimary)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            SerenitySecondaryButton(
+                text = if (contactsGranted) "Re-Sync Starred Contacts & Birthdays" else "Sync Device Starred Contacts & Birthdays",
+                icon = Icons.Default.Contacts,
+                onClick = onGrantContacts,
+                modifier = Modifier.fillMaxWidth(),
+                testTag = "connect_contacts_button"
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = facebookToken,
+                onValueChange = onTokenChange,
+                label = { Text("Facebook Graph User Access Token") },
+                placeholder = { Text("EAABwzLixnjYBO... (v21.0 Graph API)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = connectorTextFieldColors()
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = facebookAppId,
+                onValueChange = onAppIdChange,
+                label = { Text("Facebook App ID (for Browser OAuth)") },
+                placeholder = { Text("e.g. 123456789012345") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = connectorTextFieldColors()
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SerenityPrimaryButton(
+                    text = "Verify Graph Token",
+                    icon = Icons.Default.Check,
+                    onClick = onVerifyGraphToken,
+                    modifier = Modifier.weight(1.1f),
+                    testTag = "verify_facebook_token_button"
+                )
+                if (facebookAppId.isNotBlank()) {
+                    SerenitySecondaryButton(
+                        text = "OAuth Login",
+                        icon = Icons.Default.OpenInNew,
+                        onClick = onLaunchOAuth,
+                        modifier = Modifier.weight(0.9f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RealBankFinanceCard(
+    isConnected: Boolean,
+    statsText: String,
+    selectedTab: String,
+    onSelectTab: (String) -> Unit,
+    plaidClientId: String,
+    onPlaidClientIdChange: (String) -> Unit,
+    plaidSecret: String,
+    onPlaidSecretChange: (String) -> Unit,
+    plaidEnv: String,
+    onPlaidEnvChange: (String) -> Unit,
+    plaidAccessToken: String,
+    onPlaidAccessTokenChange: (String) -> Unit,
+    onConnectPlaid: () -> Unit,
+    simpleFinInput: String,
+    onSimpleFinChange: (String) -> Unit,
+    onConnectSimpleFin: () -> Unit,
+    onPickBankCsv: () -> Unit
+) {
+    SerenityCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("section_finance_app")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            ConnectorHeaderRow(
+                title = "Bank & Finance App",
+                category = "Plaid API • SimpleFIN Open Banking • CSV",
+                isConnected = isConnected,
+                icon = Icons.Default.AccountBalance,
+                accentColor = AmberTertiary
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Pull real bank account balances, 30-day spending, and late-night food delivery convenience patterns via Plaid REST API, SimpleFIN Bridge, or any exported Bank .CSV statement.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = WarmSlateCharcoal,
+                    lineHeight = 19.sp
+                )
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+            ConnectorLiveStatusBox(isConnected = isConnected, statsText = statsText, accentColor = AmberTertiary)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Mode Tabs
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf("Plaid API", "SimpleFIN", "Bank CSV").forEach { tab ->
+                    SerenityPillChip(
+                        text = tab,
+                        isSelected = selectedTab == tab,
+                        onClick = { onSelectTab(tab) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            when (selectedTab) {
+                "Plaid API" -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Environment:",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = WarmSlateCharcoal,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                        listOf("sandbox", "production").forEach { env ->
+                            SerenityPillChip(
+                                text = env.replaceFirstChar { it.uppercase() },
+                                isSelected = plaidEnv.lowercase() == env,
+                                onClick = { onPlaidEnvChange(env) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = plaidClientId,
+                        onValueChange = onPlaidClientIdChange,
+                        label = { Text("Plaid Client ID") },
+                        placeholder = { Text("Enter Plaid client_id") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = connectorTextFieldColors()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = plaidSecret,
+                        onValueChange = onPlaidSecretChange,
+                        label = { Text("Plaid Secret") },
+                        placeholder = { Text("Enter Plaid sandbox or production secret") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = connectorTextFieldColors()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = plaidAccessToken,
+                        onValueChange = onPlaidAccessTokenChange,
+                        label = { Text("Item Access Token (Auto-created in Sandbox)") },
+                        placeholder = { Text("Leave blank in Sandbox to auto-link First Platypus Bank") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = connectorTextFieldColors()
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    SerenityPrimaryButton(
+                        text = "Connect Plaid & Fetch Transactions",
+                        icon = Icons.Default.AccountBalance,
+                        onClick = onConnectPlaid,
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "connect_plaid_button"
+                    )
+                }
+
+                "SimpleFIN" -> {
+                    Text(
+                        text = "Paste a Base64 Setup Token or Access URL from SimpleFIN Bridge (beta-bridge.simplefin.org) to connect 10,000+ real US/CA banks directly.",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = WarmSlateCharcoal,
+                            lineHeight = 17.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = simpleFinInput,
+                        onValueChange = onSimpleFinChange,
+                        label = { Text("SimpleFIN Setup Token or Access URL") },
+                        placeholder = { Text("aHR0cHM6Ly9iZXRhLWJyaWRnZS5zaW1wbGVmaW4ub3Jn...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = connectorTextFieldColors()
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SerenityPrimaryButton(
+                        text = "Connect SimpleFIN Open Banking",
+                        icon = Icons.Default.Sync,
+                        onClick = onConnectSimpleFin,
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "connect_simplefin_button"
+                    )
+                }
+
+                else -> {
+                    Text(
+                        text = "Import any real .CSV statement exported from Chase, Bank of America, Apple Card, Amex, Wells Fargo, or Capital One. Parsed 100% locally on your phone.",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = WarmSlateCharcoal,
+                            lineHeight = 17.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SerenityPrimaryButton(
+                        text = "Import Real Bank .CSV Statement",
+                        icon = Icons.Default.UploadFile,
+                        onClick = onPickBankCsv,
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "import_bank_csv_button"
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectorHeaderRow(
+    title: String,
+    category: String,
+    isConnected: Boolean,
+    icon: ImageVector,
+    accentColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(accentColor.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = DeepEspresso
+                    )
+                )
+                Text(
+                    text = category,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = WarmSlateCharcoal
+                    )
+                )
+            }
+        }
+
+        Surface(
+            shape = CircleShape,
+            color = if (isConnected) MintContainer else SubtleContainer
+        ) {
+            Text(
+                text = if (isConnected) "LIVE" else "Not Linked",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = if (isConnected) DarkSageText else WarmSlateCharcoal,
+                    fontWeight = FontWeight.Bold
+                ),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConnectorLiveStatusBox(
+    isConnected: Boolean,
+    statsText: String,
+    accentColor: Color
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isConnected) SubtleContainer else RecessedContainer)
+            .border(1.dp, WarmBorder, RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 9.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(if (isConnected) accentColor else SoftMutedText.copy(alpha = 0.6f))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = statsText,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = if (isConnected) DeepEspresso else SoftMutedText,
+                    fontWeight = if (isConnected) FontWeight.SemiBold else FontWeight.Normal
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun connectorTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = CoralHoverGlow,
+    unfocusedBorderColor = WarmBorder,
+    focusedContainerColor = FloatingSurface,
+    unfocusedContainerColor = SubtleContainer
+)
+
+@Composable
 private fun SimpleConnectionsGraphicView(
     integrations: LifeSyncIntegrations,
     isMetaKeyConnected: Boolean,
     isSyncingWithMuse: Boolean,
     contentPadding: PaddingValues,
-    onToggleGoogleHealth: () -> Unit,
-    onToggleTasks: () -> Unit,
-    onToggleFinance: () -> Unit,
-    onToggleFacebook: () -> Unit,
+    onConnectGoogleHealth: () -> Unit,
+    onConnectCalendarTasks: () -> Unit,
+    onConnectFinance: () -> Unit,
+    onConnectFacebook: () -> Unit,
     onSyncToMuse: () -> Unit,
     onOpenFullConnections: () -> Unit,
     modifier: Modifier = Modifier
@@ -505,8 +1258,8 @@ private fun SimpleConnectionsGraphicView(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             SerenityStatusChip(
-                text = "$activeCount of 5 Life Streams Synced • Tap Node to Toggle",
-                pulseColor = if (activeCount >= 4) MintSecondary else AmberTertiary
+                text = "$activeCount of 5 Real Streams Active • Tap Node to Connect",
+                pulseColor = if (activeCount >= 3) MintSecondary else AmberTertiary
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -517,14 +1270,14 @@ private fun SimpleConnectionsGraphicView(
                 )
             )
             Text(
-                text = "Real-time signals feeding Muse's bio-responsive intelligence.",
+                text = "Live Health Connect, Calendar, Facebook Graph & Bank telemetry.",
                 style = MaterialTheme.typography.labelSmall.copy(
                     color = WarmSlateCharcoal
                 )
             )
         }
 
-        // 2. Centerpiece: Animated Constellation Hub + Interactive 2x2 Quick-Toggle Grid
+        // 2. Centerpiece: Animated Constellation Hub + Interactive 2x2 Live Connect Grid
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -544,7 +1297,7 @@ private fun SimpleConnectionsGraphicView(
                 )
             }
 
-            // Interactive 2x2 Quick-Toggle Integration Grid
+            // Interactive 2x2 Real Integration Grid
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -555,20 +1308,20 @@ private fun SimpleConnectionsGraphicView(
                 ) {
                     CompactIntegrationToggleTile(
                         title = "Google Health",
-                        subtitle = "7,840 steps • 7.4h sleep",
+                        subtitle = integrations.googleHealthStats,
                         isConnected = integrations.googleHealthConnected,
                         icon = Icons.Default.Favorite,
                         accentColor = MintSecondary,
-                        onClick = onToggleGoogleHealth,
+                        onClick = onConnectGoogleHealth,
                         modifier = Modifier.weight(1f)
                     )
                     CompactIntegrationToggleTile(
-                        title = "Tasks App",
-                        subtitle = "4/5 focus tasks done",
+                        title = "Calendar & Tasks",
+                        subtitle = integrations.tasksAppStats,
                         isConnected = integrations.tasksAppConnected,
                         icon = Icons.Default.TaskAlt,
                         accentColor = SageAccent,
-                        onClick = onToggleTasks,
+                        onClick = onConnectCalendarTasks,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -577,21 +1330,21 @@ private fun SimpleConnectionsGraphicView(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     CompactIntegrationToggleTile(
-                        title = "Finance App",
-                        subtitle = "Mindful budget synced",
+                        title = "Bank / Finance",
+                        subtitle = integrations.financeAppStats,
                         isConnected = integrations.financeAppConnected,
                         icon = Icons.Default.AccountBalance,
                         accentColor = AmberTertiary,
-                        onClick = onToggleFinance,
+                        onClick = onConnectFinance,
                         modifier = Modifier.weight(1f)
                     )
                     CompactIntegrationToggleTile(
                         title = "Facebook",
-                        subtitle = "Friends & call log",
+                        subtitle = integrations.facebookStats,
                         isConnected = integrations.facebookConnected,
                         icon = Icons.Default.Groups,
                         accentColor = CoralPrimary,
-                        onClick = onToggleFacebook,
+                        onClick = onConnectFacebook,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -642,7 +1395,7 @@ private fun SimpleConnectionsGraphicView(
                                 )
                             )
                             Text(
-                                text = if (isMetaKeyConnected) "Bearer Token Active • Ready" else "Tap to add token or transmit telemetry",
+                                text = if (isMetaKeyConnected) "Bearer Token Active • Ready" else "Tap to configure real API keys & OAuth",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = if (isMetaKeyConnected) DarkSageText else WarmSlateCharcoal,
                                     fontSize = 10.sp
@@ -749,7 +1502,7 @@ private fun CompactIntegrationToggleTile(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = if (isConnected) subtitle else "Disconnected • Tap to connect",
+                text = if (isConnected) subtitle else "Tap to connect live",
                 style = MaterialTheme.typography.labelSmall.copy(
                     color = if (isConnected) WarmSlateCharcoal else SoftMutedText,
                     fontWeight = FontWeight.Medium,
@@ -787,7 +1540,6 @@ private fun ConnectionsHubGraphic(
         ),
         label = "HubFloatY"
     )
-    // Traveling photon particle progress from satellite -> Muse Core (0f..1f)
     val photonProgress by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -804,7 +1556,6 @@ private fun ConnectionsHubGraphic(
         val cx = w / 2f
         val cy = (h / 2f) + floatOffset
 
-        // 1. Ambient Network Glow
         val auraRadius = (w * 0.46f) * pulseScale
         drawCircle(
             brush = Brush.radialGradient(
@@ -820,7 +1571,6 @@ private fun ConnectionsHubGraphic(
             center = Offset(cx, cy)
         )
 
-        // Subtle orbital rings connecting satellites
         val orbitRadius = w * 0.33f
         drawCircle(
             color = WarmBorder.copy(alpha = 0.65f),
@@ -835,19 +1585,17 @@ private fun ConnectionsHubGraphic(
             style = Stroke(width = 1.dp.toPx())
         )
 
-        // 2. Satellite Integration Nodes (Google Health, Tasks, Finance, Facebook, Meta Key)
         val diag = orbitRadius * 0.707f
         val nodes = listOf(
-            Triple(Offset(cx - diag, cy - diag), MintSecondary, integrations.googleHealthConnected), // Health
-            Triple(Offset(cx + diag, cy - diag), SageAccent, integrations.tasksAppConnected),        // Tasks
-            Triple(Offset(cx - diag, cy + diag), AmberTertiary, integrations.financeAppConnected),   // Finance
-            Triple(Offset(cx + diag, cy + diag), CoralPrimary, integrations.facebookConnected),      // Facebook
-            Triple(Offset(cx, cy - orbitRadius * 1.12f), CoralHoverGlow, isMetaKeyConnected)         // Meta AI Key
+            Triple(Offset(cx - diag, cy - diag), MintSecondary, integrations.googleHealthConnected),
+            Triple(Offset(cx + diag, cy - diag), SageAccent, integrations.tasksAppConnected),
+            Triple(Offset(cx - diag, cy + diag), AmberTertiary, integrations.financeAppConnected),
+            Triple(Offset(cx + diag, cy + diag), CoralPrimary, integrations.facebookConnected),
+            Triple(Offset(cx, cy - orbitRadius * 1.12f), CoralHoverGlow, isMetaKeyConnected)
         )
 
         val dashEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f), 0f)
 
-        // Draw connection beams + traveling telemetry photons for connected channels
         nodes.forEachIndexed { idx, (nodePos, color, connected) ->
             drawLine(
                 color = if (connected) color.copy(alpha = 0.70f) else SoftMutedText.copy(alpha = 0.30f),
@@ -875,7 +1623,6 @@ private fun ConnectionsHubGraphic(
             }
         }
 
-        // Draw satellite circles
         nodes.forEach { (nodePos, color, connected) ->
             val nodeR = 16.dp.toPx() * (if (connected) pulseScale else 0.92f)
             if (connected) {
@@ -898,7 +1645,6 @@ private fun ConnectionsHubGraphic(
             )
         }
 
-        // 3. Central Muse Core Hub
         val hubRadius = (w * 0.14f) * pulseScale
         drawCircle(
             brush = Brush.radialGradient(
@@ -920,122 +1666,6 @@ private fun ConnectionsHubGraphic(
             radius = 7.dp.toPx(),
             center = Offset(cx, cy)
         )
-    }
-}
-
-@Composable
-private fun IntegrationSettingCard(
-    title: String,
-    category: String,
-    description: String,
-    statsText: String,
-    isConnected: Boolean,
-    icon: ImageVector,
-    accentColor: Color,
-    onToggle: () -> Unit,
-    testTag: String
-) {
-    SerenityCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(testTag)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(accentColor.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = DeepEspresso
-                            )
-                        )
-                        Text(
-                            text = category,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = WarmSlateCharcoal
-                            )
-                        )
-                    }
-                }
-
-                Switch(
-                    checked = isConnected,
-                    onCheckedChange = { onToggle() },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = accentColor,
-                        uncheckedThumbColor = WarmSlateCharcoal,
-                        uncheckedTrackColor = SubtleContainer
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = WarmSlateCharcoal,
-                    lineHeight = 20.sp
-                )
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (isConnected) SubtleContainer else RecessedContainer)
-                    .border(1.dp, WarmBorder, RoundedCornerShape(14.dp))
-                    .padding(horizontal = 14.dp, vertical = 9.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (isConnected) accentColor else SoftMutedText.copy(alpha = 0.6f))
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = statsText,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = if (isConnected) DeepEspresso else SoftMutedText,
-                            fontWeight = if (isConnected) FontWeight.SemiBold else FontWeight.Normal
-                        )
-                    )
-                }
-            }
-        }
     }
 }
 
