@@ -156,7 +156,10 @@ class SerenityRepository(
         MetaAiConfig(
             token = prefsStore?.metaAiToken.orEmpty(),
             isConnected = prefsStore?.metaAiToken?.isNotBlank() == true,
-            lastSyncedAt = null
+            lastSyncedAt = null,
+            endpointUrl = prefsStore?.metaAiEndpoint ?: "https://api.groq.com/openai/v1/chat/completions",
+            modelName = prefsStore?.metaAiModel ?: "llama-3.1-70b-versatile",
+            isLocalLlamaPrivacyMode = prefsStore?.isLocalLlamaPrivacyMode ?: true
         )
     )
     val metaAiConfig: StateFlow<MetaAiConfig> = _metaAiConfig.asStateFlow()
@@ -969,13 +972,31 @@ class SerenityRepository(
         }
     }
 
-    fun updateMetaAiToken(newToken: String) {
-        val trimmed = newToken.trim()
-        prefsStore?.metaAiToken = trimmed
+    fun updateMetaAiConfig(
+        newToken: String,
+        endpointUrl: String = _metaAiConfig.value.endpointUrl,
+        modelName: String = _metaAiConfig.value.modelName,
+        isLocalPrivacyMode: Boolean = _metaAiConfig.value.isLocalLlamaPrivacyMode
+    ) {
+        val trimmedToken = newToken.trim()
+        val trimmedEndpoint = endpointUrl.trim().ifEmpty { "https://api.groq.com/openai/v1/chat/completions" }
+        val trimmedModel = modelName.trim().ifEmpty { "llama-3.1-70b-versatile" }
+        prefsStore?.metaAiToken = trimmedToken
+        prefsStore?.metaAiEndpoint = trimmedEndpoint
+        prefsStore?.metaAiModel = trimmedModel
+        prefsStore?.isLocalLlamaPrivacyMode = isLocalPrivacyMode
+
         _metaAiConfig.value = _metaAiConfig.value.copy(
-            token = trimmed,
-            isConnected = trimmed.isNotEmpty()
+            token = trimmedToken,
+            endpointUrl = trimmedEndpoint,
+            modelName = trimmedModel,
+            isLocalLlamaPrivacyMode = isLocalPrivacyMode,
+            isConnected = trimmedToken.isNotEmpty()
         )
+    }
+
+    fun updateMetaAiToken(newToken: String) {
+        updateMetaAiConfig(newToken)
     }
 
     suspend fun sendAllInfoToMuse(): MuseLifeAdvice {
@@ -985,7 +1006,10 @@ class SerenityRepository(
             quests = _lifeQuests.value,
             recentLogs = _careLogs.value,
             valuesAndMemories = _memories.value,
-            integrations = _integrations.value
+            integrations = _integrations.value,
+            telemetrySnapshot = _telemetrySnapshot.value,
+            endpointUrl = _metaAiConfig.value.endpointUrl,
+            modelName = _metaAiConfig.value.modelName
         )
         _latestMuseAdvice.value = advice
         _metaAiConfig.value = _metaAiConfig.value.copy(
@@ -993,12 +1017,17 @@ class SerenityRepository(
             lastSyncedAt = advice.timestamp
         )
 
+        // Update tamagotchi speech to Llama's live prescription
+        _tamagotchiState.value = _tamagotchiState.value.copy(
+            speech = advice.tamagotchiPrescription
+        )
+
         val museMessage = ChatMessage(
             id = UUID.randomUUID().toString(),
             isFromUser = false,
-            content = "✨ **Muse Superintelligence Life Prescription:**\n\n${advice.headline}\n\n${advice.overallDiagnosis}\n\n💡 **Prescription for ${_tamagotchiState.value.name}:** ${advice.tamagotchiPrescription}",
+            content = "✨ **${advice.modelUsed} Prescription:**\n\n${advice.headline}\n\n${advice.overallDiagnosis}\n\n💡 **Prescription for ${_tamagotchiState.value.name}:** ${advice.tamagotchiPrescription}\n\n🛡️ **Llama Guard Safety:** ${advice.llamaGuardStatus}",
             timestamp = advice.timestamp,
-            thoughtSteps = advice.pillars.map {
+            thoughtSteps = if (advice.reasoningSteps.isNotEmpty()) advice.reasoningSteps else advice.pillars.map {
                 ThoughtStep("${it.pillar} (${it.score}%)", it.recommendation)
             },
             suggestedPrompts = advice.pillars.map { it.suggestedAction }.take(3),
