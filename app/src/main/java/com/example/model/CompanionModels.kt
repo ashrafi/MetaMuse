@@ -236,11 +236,22 @@ data class VitalityCheckin(
     val moodWord: String
 )
 
+data class ActionableNudge(
+    val type: String, // "WHATSAPP", "CALENDAR", "WATER", "WALK"
+    val title: String,
+    val description: String,
+    val actionButtonText: String,
+    val targetPayload: String = "",
+    val isCompleted: Boolean = false
+)
+
 data class MetaAiConfig(
     val token: String = "",
     val isConnected: Boolean = false,
     val lastSyncedAt: String? = null,
-    val endpointUrl: String = "https://api.meta.ai/v1/muse/advice"
+    val endpointUrl: String = "https://api.groq.com/openai/v1/chat/completions",
+    val modelName: String = "llama-3.1-70b-versatile",
+    val isLocalLlamaPrivacyMode: Boolean = true
 )
 
 data class MuseLifeAdvice(
@@ -249,7 +260,11 @@ data class MuseLifeAdvice(
     val headline: String,
     val overallDiagnosis: String,
     val pillars: List<MusePillarAdvice>,
-    val tamagotchiPrescription: String
+    val tamagotchiPrescription: String,
+    val reasoningSteps: List<ThoughtStep> = emptyList(),
+    val actionableNudge: ActionableNudge? = null,
+    val llamaGuardStatus: String = "PASSED (Safe for Well-being & Guidance)",
+    val modelUsed: String = "Meta Llama 3.1"
 )
 
 data class MusePillarAdvice(

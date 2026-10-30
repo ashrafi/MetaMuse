@@ -12,6 +12,18 @@ class ConnectorPreferencesStore(context: Context) {
         get() = prefs.getString("meta_ai_token", "") ?: ""
         set(value) = prefs.edit().putString("meta_ai_token", value).apply()
 
+    var metaAiEndpoint: String
+        get() = prefs.getString("meta_ai_endpoint", "https://api.groq.com/openai/v1/chat/completions") ?: "https://api.groq.com/openai/v1/chat/completions"
+        set(value) = prefs.edit().putString("meta_ai_endpoint", value).apply()
+
+    var metaAiModel: String
+        get() = prefs.getString("meta_ai_model", "llama-3.1-70b-versatile") ?: "llama-3.1-70b-versatile"
+        set(value) = prefs.edit().putString("meta_ai_model", value).apply()
+
+    var isLocalLlamaPrivacyMode: Boolean
+        get() = prefs.getBoolean("is_local_llama_privacy_mode", true)
+        set(value) = prefs.edit().putBoolean("is_local_llama_privacy_mode", value).apply()
+
     var googleTasksToken: String
         get() = prefs.getString("google_tasks_token", "") ?: ""
         set(value) = prefs.edit().putString("google_tasks_token", value).apply()

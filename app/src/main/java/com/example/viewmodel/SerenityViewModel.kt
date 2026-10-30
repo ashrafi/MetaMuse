@@ -1,11 +1,15 @@
 package com.example.viewmodel
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.provider.CalendarContract
+import android.speech.tts.TextToSpeech
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.SerenityRepository
+import com.example.model.ActionableNudge
 import com.example.model.CareActionLog
 import com.example.model.ChatMessage
 import com.example.model.DailyRhythmBlock
@@ -25,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class SerenityViewModel(
     private val repository: SerenityRepository = SerenityRepository()
@@ -191,8 +196,109 @@ class SerenityViewModel(
     private val _isSyncingWithMuse = MutableStateFlow(false)
     val isSyncingWithMuse: StateFlow<Boolean> = _isSyncingWithMuse.asStateFlow()
 
+    private var textToSpeech: TextToSpeech? = null
+    private val _isSpeaking = MutableStateFlow(false)
+    val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
+
+    fun initTts(context: Context) {
+        if (textToSpeech == null) {
+            textToSpeech = TextToSpeech(context.applicationContext) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    textToSpeech?.language = Locale.US
+                    textToSpeech?.setPitch(1.04f)
+                    textToSpeech?.setSpeechRate(0.96f)
+                }
+            }
+        }
+    }
+
+    fun speakPrescription(text: String, context: Context) {
+        initTts(context)
+        if (_isSpeaking.value) {
+            textToSpeech?.stop()
+            _isSpeaking.value = false
+            return
+        }
+        val cleanText = text.replace("**", "").replace("💡", "").replace("✨", "").replace("🛡️", "").trim()
+        if (cleanText.isNotBlank()) {
+            _isSpeaking.value = true
+            textToSpeech?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, "muse_speech_id")
+            viewModelScope.launch {
+                delay(7500)
+                _isSpeaking.value = false
+            }
+        }
+    }
+
+    fun stopSpeaking() {
+        textToSpeech?.stop()
+        _isSpeaking.value = false
+    }
+
+    fun executeActionableNudge(context: Context, nudge: ActionableNudge) {
+        when (nudge.type.uppercase(Locale.US)) {
+            "WHATSAPP" -> {
+                val encoded = Uri.encode(nudge.targetPayload)
+                val waIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?text=$encoded")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                try {
+                    context.startActivity(waIntent)
+                } catch (_: Exception) {
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, nudge.targetPayload)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(Intent.createChooser(share, "Reach out via").apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                }
+                completeDemoFollowThrough()
+                repository.nurtureConnect()
+            }
+            "CALENDAR" -> {
+                val calIntent = Intent(Intent.ACTION_INSERT).apply {
+                    data = CalendarContract.Events.CONTENT_URI
+                    putExtra(CalendarContract.Events.TITLE, nudge.targetPayload.ifBlank { "Wind-Down & Rest" })
+                    putExtra(CalendarContract.Events.DESCRIPTION, "Scheduled with MetaMuse Life Equilibrium Companion")
+                    val start = System.currentTimeMillis() + 3600000L
+                    putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start)
+                    putExtra(CalendarContract.EXTRA_EVENT_END_TIME, start + 1800000L)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                try {
+                    context.startActivity(calIntent)
+                } catch (_: Exception) {
+                    insertRecoveryCalendarEvent(nudge.targetPayload, "Scheduled with MetaMuse")
+                }
+                completeDemoFollowThrough()
+            }
+            "WATER" -> {
+                feedWater()
+                completeDemoFollowThrough()
+            }
+            "WALK" -> {
+                logMovementWalk()
+                completeDemoFollowThrough()
+            }
+            else -> {
+                completeDemoFollowThrough()
+            }
+        }
+    }
+
     fun updateMetaAiToken(token: String) {
         repository.updateMetaAiToken(token)
+    }
+
+    fun updateMetaAiConfig(
+        token: String,
+        endpoint: String,
+        model: String,
+        isLocalPrivacyMode: Boolean
+    ) {
+        repository.updateMetaAiConfig(token, endpoint, model, isLocalPrivacyMode)
     }
 
     fun sendAllInfoToMuse(onSuccess: (com.example.model.MuseLifeAdvice) -> Unit = {}) {
@@ -328,6 +434,12 @@ class SerenityViewModel(
                 delay(4000)
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
     }
 
     companion object {
