@@ -84,6 +84,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -130,6 +131,9 @@ fun PresenceScreen(
     val realState by viewModel.realConnectorState.collectAsState()
 
     var tokenInput by remember(metaAiConfig.token) { mutableStateOf(metaAiConfig.token) }
+    var endpointInput by remember(metaAiConfig.endpointUrl) { mutableStateOf(metaAiConfig.endpointUrl) }
+    var modelInput by remember(metaAiConfig.modelName) { mutableStateOf(metaAiConfig.modelName) }
+    var isLocalPrivacyMode by remember(metaAiConfig.isLocalLlamaPrivacyMode) { mutableStateOf(metaAiConfig.isLocalLlamaPrivacyMode) }
     var isTokenVisible by remember { mutableStateOf(false) }
     var showTokenSavedMessage by remember { mutableStateOf(false) }
 
@@ -521,14 +525,14 @@ fun PresenceScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text(
-                                            text = "Meta Key",
+                                            text = "Meta Llama Brain",
                                             style = MaterialTheme.typography.titleMedium.copy(
                                                 fontWeight = FontWeight.Bold,
                                                 color = DeepEspresso
                                             )
                                         )
                                         Text(
-                                            text = "Meta AI & Muse Intelligence",
+                                            text = "Cross-channel reasoning & Llama Guard safety",
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 color = WarmSlateCharcoal
                                             )
@@ -538,12 +542,12 @@ fun PresenceScreen(
 
                                 Surface(
                                     shape = CircleShape,
-                                    color = if (metaAiConfig.token.isNotBlank()) MintContainer else SubtleContainer
+                                    color = if (isLocalPrivacyMode) MintContainer else if (tokenInput.isNotBlank()) MintContainer else SubtleContainer
                                 ) {
                                     Text(
-                                        text = if (metaAiConfig.token.isNotBlank()) "Key Connected" else "Key Needed",
+                                        text = if (isLocalPrivacyMode) "On-Device (Private)" else if (tokenInput.isNotBlank()) "Cloud Llama 3.1" else "Key Needed",
                                         style = MaterialTheme.typography.labelSmall.copy(
-                                            color = if (metaAiConfig.token.isNotBlank()) DarkSageText else WarmSlateCharcoal,
+                                            color = DarkSageText,
                                             fontWeight = FontWeight.Bold
                                         ),
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -553,38 +557,115 @@ fun PresenceScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            Text(
-                                text = "Enter your Meta AI Token to transmit all live synced Health, Calendar, Facebook, and Bank telemetry to Muse.",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = WarmSlateCharcoal,
-                                    lineHeight = 20.sp
-                                )
-                            )
+                            // Mode toggle chips
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (isLocalPrivacyMode) CoralPrimary else SubtleContainer,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .border(1.dp, if (isLocalPrivacyMode) CoralPrimary else WarmBorder, CircleShape)
+                                        .clip(CircleShape)
+                                        .clickable { isLocalPrivacyMode = true }
+                                ) {
+                                    Text(
+                                        text = "🔒 On-Device (Zero-Cloud)",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = if (isLocalPrivacyMode) Color.White else DeepEspresso,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
+                                    )
+                                }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (!isLocalPrivacyMode) CoralPrimary else SubtleContainer,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .border(1.dp, if (!isLocalPrivacyMode) CoralPrimary else WarmBorder, CircleShape)
+                                        .clip(CircleShape)
+                                        .clickable { isLocalPrivacyMode = false }
+                                ) {
+                                    Text(
+                                        text = "☁️ Meta Llama 3.1 API",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = if (!isLocalPrivacyMode) Color.White else DeepEspresso,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
+                                    )
+                                }
+                            }
 
-                            OutlinedTextField(
-                                value = tokenInput,
-                                onValueChange = { tokenInput = it },
-                                label = { Text("Meta AI Token") },
-                                placeholder = { Text("Paste your Meta AI Bearer Token") },
-                                singleLine = true,
-                                visualTransformation = if (isTokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                trailingIcon = {
-                                    IconButton(onClick = { isTokenVisible = !isTokenVisible }) {
-                                        Icon(
-                                            imageVector = if (isTokenVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                            contentDescription = if (isTokenVisible) "Hide token" else "Show token",
-                                            tint = WarmSlateCharcoal
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            if (isLocalPrivacyMode) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(MintContainer)
+                                        .padding(12.dp)
+                                    ) {
+                                    Text(
+                                        text = "🛡️ 100% On-Device Privacy: Your bank transactions, Health Connect biometrics, and calendars never leave your phone. Evaluated via local Llama 3 weights.",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = DarkSageText,
+                                            fontSize = 11.sp,
+                                            lineHeight = 16.sp
                                         )
-                                    }
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("meta_key_input"),
-                                shape = RoundedCornerShape(18.dp),
-                                colors = connectorTextFieldColors()
-                            )
+                                    )
+                                }
+                            } else {
+                                OutlinedTextField(
+                                    value = endpointInput,
+                                    onValueChange = { endpointInput = it },
+                                    label = { Text("Llama Inference Endpoint") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = connectorTextFieldColors()
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = modelInput,
+                                    onValueChange = { modelInput = it },
+                                    label = { Text("Model Name") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = connectorTextFieldColors()
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = tokenInput,
+                                    onValueChange = { tokenInput = it },
+                                    label = { Text("Meta Llama / Provider API Key") },
+                                    placeholder = { Text("Bearer token") },
+                                    singleLine = true,
+                                    visualTransformation = if (isTokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    trailingIcon = {
+                                        IconButton(onClick = { isTokenVisible = !isTokenVisible }) {
+                                            Icon(
+                                                imageVector = if (isTokenVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = null,
+                                                tint = WarmSlateCharcoal
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("meta_key_input"),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = connectorTextFieldColors()
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(12.dp))
 
@@ -593,10 +674,15 @@ fun PresenceScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 SerenitySecondaryButton(
-                                    text = "Save Key",
+                                    text = "Save Config",
                                     icon = Icons.Default.Check,
                                     onClick = {
-                                        viewModel.updateMetaAiToken(tokenInput)
+                                        viewModel.updateMetaAiConfig(
+                                            token = tokenInput,
+                                            endpoint = endpointInput,
+                                            model = modelInput,
+                                            isLocalPrivacyMode = isLocalPrivacyMode
+                                        )
                                         showTokenSavedMessage = true
                                     },
                                     modifier = Modifier.weight(1f),
@@ -604,7 +690,7 @@ fun PresenceScreen(
                                 )
 
                                 SerenityPrimaryButton(
-                                    text = if (isSyncingWithMuse) "Transmitting..." else "Send to Muse",
+                                    text = if (isSyncingWithMuse) "Reasoning..." else "Run Llama Brain",
                                     icon = Icons.Default.Sync,
                                     onClick = { viewModel.sendAllInfoToMuse() },
                                     modifier = Modifier.weight(1.3f),
@@ -630,7 +716,7 @@ fun PresenceScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Meta Key saved securely.",
+                                        text = "Llama brain configuration saved securely.",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = DarkSageText,
                                             fontWeight = FontWeight.Bold
@@ -1388,16 +1474,16 @@ private fun SimpleConnectionsGraphicView(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "Meta AI Superintelligence Key",
+                                text = "Meta Llama Brain & Privacy",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = DeepEspresso
                                 )
                             )
                             Text(
-                                text = if (isMetaKeyConnected) "Bearer Token Active • Ready" else "Tap to configure real API keys & OAuth",
+                                text = if (isMetaKeyConnected) "Llama Inference Active • Ready" else "On-Device Zero-Cloud Privacy • Ready",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = if (isMetaKeyConnected) DarkSageText else WarmSlateCharcoal,
+                                    color = DarkSageText,
                                     fontSize = 10.sp
                                 )
                             )
@@ -1412,7 +1498,7 @@ private fun SimpleConnectionsGraphicView(
                             .clickable(onClick = onSyncToMuse)
                     ) {
                         Text(
-                            text = if (isSyncingWithMuse) "Syncing..." else "Sync Muse",
+                            text = if (isSyncingWithMuse) "Reasoning..." else "Run Llama",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = CoralPrimary,
                                 fontWeight = FontWeight.Bold,
