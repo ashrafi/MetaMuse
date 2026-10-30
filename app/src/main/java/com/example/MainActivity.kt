@@ -73,7 +73,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         intent?.data?.let { serenityViewModel.handleOAuthRedirect(it) }
         setContent {
-            SerenityTheme {
+            val themeMode by serenityViewModel.appThemeMode.collectAsState()
+            SerenityTheme(themeMode = themeMode) {
                 SerenityMainApp(viewModel = serenityViewModel)
             }
         }
