@@ -681,6 +681,7 @@ private fun AvatarOnlyHomeView(
             Spacer(modifier = Modifier.height(8.dp))
 
             val scenarios = listOf(
+                MuseDemoScenario.LIVE_REAL_DATA to "🟢 Live Data",
                 MuseDemoScenario.NONE to "Healthy",
                 MuseDemoScenario.SUCCESS_TRAP to "1. Success Trap",
                 MuseDemoScenario.INVISIBLE_MONEY_LEAK to "2. Money Leak",
@@ -1001,6 +1002,7 @@ private fun MuseDemoSelectorCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             val scenarios = listOf(
+                MuseDemoScenario.LIVE_REAL_DATA,
                 MuseDemoScenario.SUCCESS_TRAP,
                 MuseDemoScenario.INVISIBLE_MONEY_LEAK,
                 MuseDemoScenario.CONNECTION_DEBT,
