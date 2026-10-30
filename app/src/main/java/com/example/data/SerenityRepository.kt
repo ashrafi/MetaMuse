@@ -32,6 +32,7 @@ import com.example.model.TamagotchiState
 import com.example.model.ThoughtStep
 import com.example.model.ThoughtStream
 import com.example.model.VitalityCheckin
+import com.example.ui.theme.AppThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -175,6 +176,22 @@ class SerenityRepository(
         )
     )
     val integrations: StateFlow<LifeSyncIntegrations> = _integrations.asStateFlow()
+
+    private val _appThemeMode = MutableStateFlow(
+        prefsStore?.appThemeMode?.let {
+            try {
+                AppThemeMode.valueOf(it)
+            } catch (e: Exception) {
+                AppThemeMode.LUMINOUS_SERENITY
+            }
+        } ?: AppThemeMode.LUMINOUS_SERENITY
+    )
+    val appThemeMode: StateFlow<AppThemeMode> = _appThemeMode.asStateFlow()
+
+    fun setAppThemeMode(mode: AppThemeMode) {
+        _appThemeMode.value = mode
+        prefsStore?.appThemeMode = mode.name
+    }
 
     // =========================================================================
     // REAL CONNECTOR SYNC & AUTHENTICATION METHODS
