@@ -633,7 +633,8 @@ fun PresenceScreen(
                                         .clip(RoundedCornerShape(14.dp))
                                         .background(MintContainer)
                                         .padding(12.dp)
-                                Sommers                                    Text(
+                                ) {
+                                    Text(
                                         text = "🛡️ 100% On-Device Privacy: Your bank transactions, Health Connect biometrics, and calendars never leave your phone. Evaluated via local Llama 3 weights.",
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = DarkSageText,
@@ -1108,7 +1109,7 @@ private fun RealBankFinanceCard(
                         listOf("sandbox", "production").forEach { env ->
                             SerenityPillChip(
                                 text = env.replaceFirstChar { it.uppercase() },
-                                selected = plaidEnv.lowercase() == env,
+                                isSelected = plaidEnv.lowercase() == env,
                                 onClick = { onPlaidEnvChange(env) }
                             )
                         }
