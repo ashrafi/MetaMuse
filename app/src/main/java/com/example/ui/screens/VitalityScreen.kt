@@ -1363,7 +1363,7 @@ private fun ChannelDataCard(
                                 RoundedCornerShape(14.dp)
                             )
                             .padding(10.dp)
-                        ) {
+                    ) {
                         Column {
                             Text(
                                 text = metric.label,
