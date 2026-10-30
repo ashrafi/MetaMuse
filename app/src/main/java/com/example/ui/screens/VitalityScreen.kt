@@ -261,6 +261,7 @@ fun VitalityScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val scenarios = listOf(
+                            MuseDemoScenario.LIVE_REAL_DATA,
                             MuseDemoScenario.SUCCESS_TRAP,
                             MuseDemoScenario.INVISIBLE_MONEY_LEAK,
                             MuseDemoScenario.CONNECTION_DEBT,
@@ -861,6 +862,7 @@ private fun SimpleDataGraphicView(
             Spacer(modifier = Modifier.height(8.dp))
 
             val scenarios = listOf(
+                MuseDemoScenario.LIVE_REAL_DATA to "🟢 Live Data",
                 MuseDemoScenario.NONE to "Healthy",
                 MuseDemoScenario.SUCCESS_TRAP to "1. Success Trap",
                 MuseDemoScenario.INVISIBLE_MONEY_LEAK to "2. Money Leak",
@@ -1361,7 +1363,7 @@ private fun ChannelDataCard(
                                 RoundedCornerShape(14.dp)
                             )
                             .padding(10.dp)
-                    ) {
+                        ) {
                         Column {
                             Text(
                                 text = metric.label,
