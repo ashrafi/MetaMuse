@@ -67,4 +67,8 @@ class ConnectorPreferencesStore(context: Context) {
     var cachedCsvLabel: String?
         get() = prefs.getString("cached_csv_label", null)
         set(value) = prefs.edit().putString("cached_csv_label", value).apply()
+
+    var appThemeMode: String
+        get() = prefs.getString("app_theme_mode", "LUMINOUS_SERENITY") ?: "LUMINOUS_SERENITY"
+        set(value) = prefs.edit().putString("app_theme_mode", value).apply()
 }
