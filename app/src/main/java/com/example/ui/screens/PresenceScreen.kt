@@ -612,7 +612,7 @@ fun PresenceScreen(
                                         .clip(RoundedCornerShape(14.dp))
                                         .background(MintContainer)
                                         .padding(12.dp)
-                                    ) {
+                                ) {
                                     Text(
                                         text = "🛡️ 100% On-Device Privacy: Your bank transactions, Health Connect biometrics, and calendars never leave your phone. Evaluated via local Llama 3 weights.",
                                         style = MaterialTheme.typography.bodySmall.copy(
