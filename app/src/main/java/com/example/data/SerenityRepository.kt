@@ -1,5 +1,16 @@
 package com.example.data
 
+import android.content.Context
+import android.net.Uri
+import com.example.data.connectors.BankFinanceConnector
+import com.example.data.connectors.CalendarTasksConnector
+import com.example.data.connectors.ConnectorPreferencesStore
+import com.example.data.connectors.FacebookSocialConnector
+import com.example.data.connectors.HealthConnectManager
+import com.example.data.connectors.RealCalendarTasksResult
+import com.example.data.connectors.RealFinanceSyncResult
+import com.example.data.connectors.RealHealthSyncResult
+import com.example.data.connectors.RealSocialSyncResult
 import com.example.model.AccentType
 import com.example.model.CareActionLog
 import com.example.model.ChannelMetricItem
@@ -14,6 +25,7 @@ import com.example.model.MetaAiConfig
 import com.example.model.MuseDemoScenario
 import com.example.model.MuseLifeAdvice
 import com.example.model.PresenceMode
+import com.example.model.RealConnectorState
 import com.example.model.SyntheticTelemetrySnapshot
 import com.example.model.TamagotchiMood
 import com.example.model.TamagotchiState
@@ -28,7 +40,51 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-class SerenityRepository {
+class SerenityRepository(
+    private val appContext: Context? = null
+) {
+
+    private val prefsStore: ConnectorPreferencesStore? =
+        appContext?.applicationContext?.let { ConnectorPreferencesStore(it) }
+
+    val healthConnectManager = HealthConnectManager()
+    val calendarTasksConnector = CalendarTasksConnector()
+    val facebookSocialConnector = FacebookSocialConnector()
+    val bankFinanceConnector = BankFinanceConnector()
+
+    private var latestHealthResult: RealHealthSyncResult? = null
+    private var latestCalendarResult: RealCalendarTasksResult? = null
+    private var latestSocialResult: RealSocialSyncResult? = null
+    private var latestFinanceResult: RealFinanceSyncResult? =
+        prefsStore?.cachedCsvTransactionsJson?.takeIf { it.isNotBlank() }?.let {
+            bankFinanceConnector.restoreCachedCsv(it)
+        }
+
+    private val initialScenario =
+        if (appContext != null) MuseDemoScenario.LIVE_REAL_DATA else MuseDemoScenario.NONE
+
+    private val _realConnectorState = MutableStateFlow(
+        RealConnectorState(
+            healthSdkAvailable = appContext?.let { healthConnectManager.isSdkAvailable(it) } ?: true,
+            calendarPermissionGranted = appContext?.let { calendarTasksConnector.hasCalendarPermission(it) } ?: false,
+            googleTasksToken = prefsStore?.googleTasksToken.orEmpty(),
+            facebookAppId = prefsStore?.facebookAppId.orEmpty(),
+            facebookAccessToken = prefsStore?.facebookAccessToken.orEmpty(),
+            facebookUserName = prefsStore?.facebookUserName,
+            contactsPermissionGranted = appContext?.let { facebookSocialConnector.hasContactsPermission(it) } ?: false,
+            plaidClientId = prefsStore?.plaidClientId.orEmpty(),
+            plaidSecret = prefsStore?.plaidSecret.orEmpty(),
+            plaidEnvironment = prefsStore?.plaidEnvironment ?: "sandbox",
+            plaidAccessToken = prefsStore?.plaidAccessToken.orEmpty(),
+            simpleFinUrlOrToken = prefsStore?.simpleFinUrlOrToken.orEmpty(),
+            connectedBankSource = latestFinanceResult?.sourceName,
+            liveTotalBalanceUsd = latestFinanceResult?.totalBalanceUsd,
+            liveMonthlySpendUsd = latestFinanceResult?.totalSpend30dUsd ?: 0.0,
+            liveDeliveryOrderCount = latestFinanceResult?.deliveryOrderCount ?: 0,
+            liveDeliverySpendUsd = latestFinanceResult?.deliverySpendUsd ?: 0.0
+        )
+    )
+    val realConnectorState: StateFlow<RealConnectorState> = _realConnectorState.asStateFlow()
 
     private val _tamagotchiState = MutableStateFlow(
         TamagotchiState(
@@ -43,23 +99,27 @@ class SerenityRepository {
             physicalEnergy = 0.78f,
             connection = 0.80f,
             mood = TamagotchiMood.RADIANT,
-            speech = "I feel so radiant today! You've nurtured our mind and body beautifully.",
+            speech = if (appContext != null) {
+                "Ready for real-world telemetry! Connect Health Connect, Calendar, Facebook, or your Bank in Connections."
+            } else {
+                "I feel so radiant today! You've nurtured our mind and body beautifully."
+            },
             equippedAccessory = "Celestial Halo",
             isSleeping = false,
             totalPets = 42,
-            activeScenario = MuseDemoScenario.NONE,
+            activeScenario = initialScenario,
             recoveryStage = DemoRecoveryStage.RECOVERED_HAPPY
         )
     )
     val tamagotchiState: StateFlow<TamagotchiState> = _tamagotchiState.asStateFlow()
 
-    private val _activeDemoScenario = MutableStateFlow(MuseDemoScenario.NONE)
+    private val _activeDemoScenario = MutableStateFlow(initialScenario)
     val activeDemoScenario: StateFlow<MuseDemoScenario> = _activeDemoScenario.asStateFlow()
 
     private val _demoRecoveryStage = MutableStateFlow(DemoRecoveryStage.RECOVERED_HAPPY)
     val demoRecoveryStage: StateFlow<DemoRecoveryStage> = _demoRecoveryStage.asStateFlow()
 
-    private val _telemetrySnapshot = MutableStateFlow(buildTelemetrySnapshot(MuseDemoScenario.NONE, false))
+    private val _telemetrySnapshot = MutableStateFlow(buildTelemetrySnapshot(initialScenario, false))
     val telemetrySnapshot: StateFlow<SyntheticTelemetrySnapshot> = _telemetrySnapshot.asStateFlow()
 
     private val _careLogs = MutableStateFlow<List<CareActionLog>>(initialCareLogs())
@@ -94,8 +154,8 @@ class SerenityRepository {
 
     private val _metaAiConfig = MutableStateFlow(
         MetaAiConfig(
-            token = "",
-            isConnected = false,
+            token = prefsStore?.metaAiToken.orEmpty(),
+            isConnected = prefsStore?.metaAiToken?.isNotBlank() == true,
             lastSyncedAt = null
         )
     )
@@ -104,8 +164,476 @@ class SerenityRepository {
     private val _latestMuseAdvice = MutableStateFlow<MuseLifeAdvice?>(null)
     val latestMuseAdvice: StateFlow<MuseLifeAdvice?> = _latestMuseAdvice.asStateFlow()
 
-    private val _integrations = MutableStateFlow(LifeSyncIntegrations())
+    private val _integrations = MutableStateFlow(
+        LifeSyncIntegrations(
+            financeAppConnected = latestFinanceResult?.isConnected == true,
+            financeAppStats = latestFinanceResult?.statusLine
+                ?: "Not connected • Link Plaid API, SimpleFIN, or Bank CSV"
+        )
+    )
     val integrations: StateFlow<LifeSyncIntegrations> = _integrations.asStateFlow()
+
+    // =========================================================================
+    // REAL CONNECTOR SYNC & AUTHENTICATION METHODS
+    // =========================================================================
+
+    suspend fun syncAllRealChannels() {
+        val ctx = appContext ?: return
+        _realConnectorState.value = _realConnectorState.value.copy(
+            isSyncing = true,
+            lastError = null
+        )
+        try {
+            latestHealthResult = healthConnectManager.syncRealHealthData(ctx)
+            latestCalendarResult = calendarTasksConnector.syncCalendarAndTasks(
+                context = ctx,
+                googleTasksOAuthToken = _realConnectorState.value.googleTasksToken
+            )
+            latestSocialResult = facebookSocialConnector.syncFacebookAndContacts(
+                context = ctx,
+                facebookAccessToken = _realConnectorState.value.facebookAccessToken,
+                calendarDeclinedEvents14d = latestCalendarResult?.canceledOrDeclined14d ?: 0
+            )
+
+            // Refresh bank if Plaid or SimpleFIN credentials are stored
+            val st = _realConnectorState.value
+            when {
+                st.plaidClientId.isNotBlank() && st.plaidSecret.isNotBlank() -> {
+                    val plaidRes = bankFinanceConnector.syncViaPlaid(
+                        clientId = st.plaidClientId,
+                        secret = st.plaidSecret,
+                        environment = st.plaidEnvironment,
+                        existingAccessToken = st.plaidAccessToken
+                    )
+                    if (plaidRes.isConnected) {
+                        latestFinanceResult = plaidRes
+                        plaidRes.exchangedPlaidAccessToken?.let { token ->
+                            prefsStore?.plaidAccessToken = token
+                            _realConnectorState.value = _realConnectorState.value.copy(plaidAccessToken = token)
+                        }
+                    }
+                }
+                st.simpleFinUrlOrToken.isNotBlank() && st.simpleFinUrlOrToken.startsWith("http") -> {
+                    val sfRes = bankFinanceConnector.syncViaSimpleFin(st.simpleFinUrlOrToken)
+                    if (sfRes.isConnected) {
+                        latestFinanceResult = sfRes
+                    }
+                }
+            }
+            rebuildLiveTelemetryAndEvaluateRules()
+        } finally {
+            _realConnectorState.value = _realConnectorState.value.copy(
+                isSyncing = false,
+                lastSyncSummary = "Synced at ${currentTimeFormatted()}"
+            )
+        }
+    }
+
+    suspend fun syncRealHealth() {
+        val ctx = appContext ?: return
+        _realConnectorState.value = _realConnectorState.value.copy(isSyncing = true, lastError = null)
+        try {
+            latestHealthResult = healthConnectManager.syncRealHealthData(ctx)
+            _activeDemoScenario.value = MuseDemoScenario.LIVE_REAL_DATA
+            rebuildLiveTelemetryAndEvaluateRules()
+        } finally {
+            _realConnectorState.value = _realConnectorState.value.copy(
+                isSyncing = false,
+                lastSyncSummary = "Health Connect synced at ${currentTimeFormatted()}"
+            )
+        }
+    }
+
+    suspend fun syncRealCalendarAndTasks(googleTasksToken: String? = null) {
+        val ctx = appContext ?: return
+        if (googleTasksToken != null) {
+            val cleaned = googleTasksToken.trim()
+            prefsStore?.googleTasksToken = cleaned
+            _realConnectorState.value = _realConnectorState.value.copy(googleTasksToken = cleaned)
+        }
+        _realConnectorState.value = _realConnectorState.value.copy(isSyncing = true, lastError = null)
+        try {
+            val res = calendarTasksConnector.syncCalendarAndTasks(
+                context = ctx,
+                googleTasksOAuthToken = _realConnectorState.value.googleTasksToken
+            )
+            latestCalendarResult = res
+            // Re-evaluate social declined count if contacts/facebook also active
+            if (latestSocialResult != null) {
+                latestSocialResult = facebookSocialConnector.syncFacebookAndContacts(
+                    context = ctx,
+                    facebookAccessToken = _realConnectorState.value.facebookAccessToken,
+                    calendarDeclinedEvents14d = res.canceledOrDeclined14d
+                )
+            }
+            _activeDemoScenario.value = MuseDemoScenario.LIVE_REAL_DATA
+            rebuildLiveTelemetryAndEvaluateRules()
+        } finally {
+            _realConnectorState.value = _realConnectorState.value.copy(
+                isSyncing = false,
+                lastSyncSummary = "Calendar & Tasks synced at ${currentTimeFormatted()}"
+            )
+        }
+    }
+
+    suspend fun syncRealFacebookAndContacts(
+        facebookAccessToken: String? = null,
+        facebookAppId: String? = null
+    ) {
+        val ctx = appContext ?: return
+        if (facebookAppId != null) {
+            val cleanAppId = facebookAppId.trim()
+            prefsStore?.facebookAppId = cleanAppId
+            _realConnectorState.value = _realConnectorState.value.copy(facebookAppId = cleanAppId)
+        }
+        if (facebookAccessToken != null) {
+            val cleanToken = facebookAccessToken.trim()
+            prefsStore?.facebookAccessToken = cleanToken
+            _realConnectorState.value = _realConnectorState.value.copy(facebookAccessToken = cleanToken)
+        }
+        _realConnectorState.value = _realConnectorState.value.copy(isSyncing = true, lastError = null)
+        try {
+            val res = facebookSocialConnector.syncFacebookAndContacts(
+                context = ctx,
+                facebookAccessToken = _realConnectorState.value.facebookAccessToken,
+                calendarDeclinedEvents14d = latestCalendarResult?.canceledOrDeclined14d ?: 0
+            )
+            latestSocialResult = res
+            if (res.facebookUserName != null) {
+                prefsStore?.facebookUserName = res.facebookUserName
+            }
+            _activeDemoScenario.value = MuseDemoScenario.LIVE_REAL_DATA
+            rebuildLiveTelemetryAndEvaluateRules()
+        } finally {
+            _realConnectorState.value = _realConnectorState.value.copy(
+                isSyncing = false,
+                lastError = latestSocialResult?.errorMessage,
+                lastSyncSummary = "Facebook & Contacts synced at ${currentTimeFormatted()}"
+            )
+        }
+    }
+
+    fun launchFacebookOAuth(appId: String) {
+        val ctx = appContext ?: return
+        val cleanId = appId.trim()
+        prefsStore?.facebookAppId = cleanId
+        _realConnectorState.value = _realConnectorState.value.copy(facebookAppId = cleanId)
+        facebookSocialConnector.launchFacebookOAuthLogin(ctx, cleanId)
+    }
+
+    suspend fun handleOAuthRedirect(uri: Uri?): Boolean {
+        val token = facebookSocialConnector.extractAccessTokenFromRedirect(uri) ?: return false
+        syncRealFacebookAndContacts(facebookAccessToken = token)
+        return true
+    }
+
+    suspend fun connectPlaidBank(
+        clientId: String,
+        secret: String,
+        environment: String,
+        accessToken: String = ""
+    ) {
+        val cleanId = clientId.trim()
+        val cleanSecret = secret.trim()
+        val cleanEnv = environment.trim().lowercase(Locale.US).ifBlank { "sandbox" }
+        val cleanToken = accessToken.trim()
+
+        prefsStore?.plaidClientId = cleanId
+        prefsStore?.plaidSecret = cleanSecret
+        prefsStore?.plaidEnvironment = cleanEnv
+        if (cleanToken.isNotBlank()) {
+            prefsStore?.plaidAccessToken = cleanToken
+        }
+
+        _realConnectorState.value = _realConnectorState.value.copy(
+            isSyncing = true,
+            lastError = null,
+            plaidClientId = cleanId,
+            plaidSecret = cleanSecret,
+            plaidEnvironment = cleanEnv,
+            plaidAccessToken = cleanToken.ifBlank { _realConnectorState.value.plaidAccessToken }
+        )
+        try {
+            val res = bankFinanceConnector.syncViaPlaid(
+                clientId = cleanId,
+                secret = cleanSecret,
+                environment = cleanEnv,
+                existingAccessToken = cleanToken
+            )
+            latestFinanceResult = res
+            if (res.exchangedPlaidAccessToken != null) {
+                prefsStore?.plaidAccessToken = res.exchangedPlaidAccessToken
+                _realConnectorState.value = _realConnectorState.value.copy(
+                    plaidAccessToken = res.exchangedPlaidAccessToken
+                )
+            }
+            _activeDemoScenario.value = MuseDemoScenario.LIVE_REAL_DATA
+            rebuildLiveTelemetryAndEvaluateRules()
+        } finally {
+            _realConnectorState.value = _realConnectorState.value.copy(
+                isSyncing = false,
+                lastError = latestFinanceResult?.errorMessage,
+                lastSyncSummary = if (latestFinanceResult?.isConnected == true) {
+                    "Plaid Bank connected at ${currentTimeFormatted()}"
+                } else {
+                    latestFinanceResult?.statusLine ?: "Plaid sync finished"
+                }
+            )
+        }
+    }
+
+    suspend fun connectSimpleFinBank(tokenOrUrl: String) {
+        val clean = tokenOrUrl.trim()
+        prefsStore?.simpleFinUrlOrToken = clean
+        _realConnectorState.value = _realConnectorState.value.copy(
+            isSyncing = true,
+            lastError = null,
+            simpleFinUrlOrToken = clean
+        )
+        try {
+            val res = bankFinanceConnector.syncViaSimpleFin(clean)
+            latestFinanceResult = res
+            if (res.claimedSimpleFinAccessUrl != null) {
+                prefsStore?.simpleFinUrlOrToken = res.claimedSimpleFinAccessUrl
+                _realConnectorState.value = _realConnectorState.value.copy(
+                    simpleFinUrlOrToken = res.claimedSimpleFinAccessUrl
+                )
+            }
+            _activeDemoScenario.value = MuseDemoScenario.LIVE_REAL_DATA
+            rebuildLiveTelemetryAndEvaluateRules()
+        } finally {
+            _realConnectorState.value = _realConnectorState.value.copy(
+                isSyncing = false,
+                lastError = latestFinanceResult?.errorMessage,
+                lastSyncSummary = "SimpleFIN Bank synced at ${currentTimeFormatted()}"
+            )
+        }
+    }
+
+    suspend fun importRealBankCsv(uri: Uri) {
+        val ctx = appContext ?: return
+        _realConnectorState.value = _realConnectorState.value.copy(isSyncing = true, lastError = null)
+        try {
+            val (res, summaryJson) = bankFinanceConnector.importBankCsv(ctx, uri)
+            latestFinanceResult = res
+            if (summaryJson != null) {
+                prefsStore?.cachedCsvTransactionsJson = summaryJson
+            }
+            _activeDemoScenario.value = MuseDemoScenario.LIVE_REAL_DATA
+            rebuildLiveTelemetryAndEvaluateRules()
+        } finally {
+            _realConnectorState.value = _realConnectorState.value.copy(
+                isSyncing = false,
+                lastError = latestFinanceResult?.errorMessage,
+                lastSyncSummary = "Bank CSV imported at ${currentTimeFormatted()}"
+            )
+        }
+    }
+
+    fun openHealthConnectSettings() {
+        val ctx = appContext ?: return
+        healthConnectManager.openHealthConnectSettings(ctx)
+    }
+
+    fun insertRecoveryCalendarEvent(title: String, description: String) {
+        val ctx = appContext ?: return
+        calendarTasksConnector.openCalendarInsertEvent(ctx, title, description)
+    }
+
+    private fun rebuildLiveTelemetryAndEvaluateRules() {
+        val h = latestHealthResult
+        val c = latestCalendarResult
+        val s = latestSocialResult
+        val f = latestFinanceResult
+
+        _realConnectorState.value = _realConnectorState.value.copy(
+            healthSdkAvailable = appContext?.let { healthConnectManager.isSdkAvailable(it) } ?: true,
+            healthPermissionsGranted = h?.isConnected == true,
+            liveStepsToday = h?.stepsToday ?: 0L,
+            liveAvgSleepHours = h?.avgSleepHours7d ?: 0f,
+            liveHeartRateBpm = h?.restingOrAvgHrBpm ?: 0L,
+            liveHydrationLiters = h?.hydrationLitersToday ?: 0.0,
+            calendarPermissionGranted = c?.isConnected == true ||
+                (appContext?.let { calendarTasksConnector.hasCalendarPermission(it) } == true),
+            liveEventsToday = c?.eventsTodayCount ?: 0,
+            liveCompletedEventsToday = c?.completedTodayCount ?: 0,
+            liveLateNightEvents7d = c?.lateNightEvents7d ?: 0,
+            liveCanceledEvents14d = c?.canceledOrDeclined14d ?: 0,
+            facebookUserName = s?.facebookUserName ?: _realConnectorState.value.facebookUserName,
+            contactsPermissionGranted = s?.contactsConnected == true ||
+                (appContext?.let { facebookSocialConnector.hasContactsPermission(it) } == true),
+            liveStarredContactsCount = s?.starredCloseContacts ?: 0,
+            liveNeglectedContactsCount = s?.neglectedStarredContacts ?: 0,
+            connectedBankSource = f?.sourceName,
+            liveTotalBalanceUsd = f?.totalBalanceUsd,
+            liveMonthlySpendUsd = f?.totalSpend30dUsd ?: 0.0,
+            liveDeliveryOrderCount = f?.deliveryOrderCount ?: 0,
+            liveDeliverySpendUsd = f?.deliverySpendUsd ?: 0.0
+        )
+
+        if (_activeDemoScenario.value != MuseDemoScenario.LIVE_REAL_DATA) {
+            return
+        }
+
+        _integrations.value = LifeSyncIntegrations(
+            googleHealthConnected = h?.isConnected == true,
+            googleHealthStats = h?.statusLine ?: "Not connected • Grant Android Health Connect access",
+            facebookConnected = s?.isConnected == true,
+            facebookStats = s?.statusLine ?: "Not connected • Connect Facebook Graph API or Contacts",
+            financeAppConnected = f?.isConnected == true,
+            financeAppStats = f?.statusLine ?: "Not connected • Link Plaid API, SimpleFIN, or Bank CSV",
+            tasksAppConnected = c?.isConnected == true,
+            tasksAppStats = c?.statusLine ?: "Not connected • Grant Android Calendar / Google Tasks access"
+        )
+
+        val liveSnap = buildLiveTelemetrySnapshot()
+        _telemetrySnapshot.value = liveSnap
+
+        val connectedCount = listOf(
+            h?.isConnected == true,
+            c?.isConnected == true,
+            s?.isConnected == true,
+            f?.isConnected == true
+        ).count { it }
+
+        val hydrationVital = when {
+            h?.isConnected == true && h.hydrationLitersToday > 0.1 ->
+                (h.hydrationLitersToday / 2.2).toFloat().coerceIn(0.35f, 1.0f)
+            else -> 0.80f
+        }
+        val physicalVital = if (h?.isConnected == true) {
+            (h.report.scorePercent / 100f).coerceIn(0.25f, 1.0f)
+        } else 0.75f
+        val focusVital = if (c?.isConnected == true) {
+            (c.report.scorePercent / 100f).coerceIn(0.35f, 1.0f)
+        } else 0.78f
+        val peaceVital = if (f?.isConnected == true) {
+            (f.report.scorePercent / 100f).coerceIn(0.30f, 1.0f)
+        } else 0.78f
+        val connectionVital = if (s?.isConnected == true) {
+            (s.report.scorePercent / 100f).coerceIn(0.25f, 1.0f)
+        } else 0.75f
+
+        val (liveMood, liveSpeech, liveStage) = when {
+            connectedCount == 0 -> Triple(
+                TamagotchiMood.BALANCED,
+                "Live mode active! Open the Connections tab to authorize Health Connect, Calendar, Facebook, or your Bank account.",
+                DemoRecoveryStage.RECOVERED_HAPPY
+            )
+            h?.report?.isAlert == true && (c?.report?.isAlert == true || s?.report?.isAlert == true) -> Triple(
+                TamagotchiMood.SICK,
+                "Live Alert: Your real sleep dropped to ${String.format(Locale.US, "%.1f", h.avgSleepHours7d)}h while late-night schedule load spiked. Let's protect tonight's rest!",
+                DemoRecoveryStage.PROACTIVE_CONCERN
+            )
+            f?.report?.isAlert == true -> Triple(
+                TamagotchiMood.SICK,
+                "Live Finance Alert: I spotted ${f.deliveryOrderCount} food-delivery charges ($${String.format(Locale.US, "%.0f", f.deliverySpendUsd)}) in your real transactions. Want to plan an easy 5-minute dinner?",
+                DemoRecoveryStage.PROACTIVE_CONCERN
+            )
+            s?.report?.isAlert == true -> Triple(
+                TamagotchiMood.SAD,
+                "Live Social Alert: Several recent events were declined. Want to schedule 10 minutes to catch up with someone close?",
+                DemoRecoveryStage.PROACTIVE_CONCERN
+            )
+            h?.report?.isAlert == true -> Triple(
+                TamagotchiMood.TIRED,
+                "Live Health Connect shows ${String.format(Locale.US, "%.1f", h.avgSleepHours7d)}h average sleep. Let's wind down early tonight!",
+                DemoRecoveryStage.PROACTIVE_CONCERN
+            )
+            else -> Triple(
+                TamagotchiMood.RADIANT,
+                "Synced with $connectedCount live data stream${if (connectedCount == 1) "" else "s"}! Your real-world vitals are feeding my aura directly.",
+                DemoRecoveryStage.RECOVERED_HAPPY
+            )
+        }
+
+        _demoRecoveryStage.value = liveStage
+        _tamagotchiState.value = _tamagotchiState.value.copy(
+            hydration = hydrationVital,
+            focus = focusVital,
+            innerPeace = peaceVital,
+            physicalEnergy = physicalVital,
+            connection = connectionVital,
+            mood = liveMood,
+            speech = liveSpeech,
+            activeScenario = MuseDemoScenario.LIVE_REAL_DATA,
+            recoveryStage = liveStage
+        )
+    }
+
+    private fun buildLiveTelemetrySnapshot(): SyntheticTelemetrySnapshot {
+        val hReport = latestHealthResult?.report ?: ChannelTelemetryReport(
+            channelName = "Health (Health Connect)",
+            headlineStatus = "Permission Needed",
+            summary = "Grant Android Health Connect access in Connections to stream real steps, sleep, heart rate, and hydration.",
+            scorePercent = 50,
+            isAlert = false,
+            metrics = listOf(
+                ChannelMetricItem("Steps Today", "—", "Connect Health"),
+                ChannelMetricItem("7d Avg Sleep", "—", "Connect Health"),
+                ChannelMetricItem("Heart Rate", "—", "Connect Health")
+            ),
+            historyLog = listOf("Open Connections → Connect to Google Health to authorize live Health Connect records.")
+        )
+
+        val cReport = latestCalendarResult?.report ?: ChannelTelemetryReport(
+            channelName = "Calendar & Google Tasks",
+            headlineStatus = "Permission Needed",
+            summary = "Grant Android Calendar permission or link a Google Tasks OAuth token to read your real schedule and focus load.",
+            scorePercent = 50,
+            isAlert = false,
+            metrics = listOf(
+                ChannelMetricItem("Today's Events", "—", "Connect Calendar"),
+                ChannelMetricItem("Late-Night Load", "—", "Connect Calendar"),
+                ChannelMetricItem("Google Tasks", "—", "Optional OAuth")
+            ),
+            historyLog = listOf("Open Connections → Connect Calendar & Tasks to read live device events.")
+        )
+
+        val fReport = latestFinanceResult?.report ?: bankFinanceConnector.unconfiguredResult().report
+
+        val sReport = latestSocialResult?.report ?: ChannelTelemetryReport(
+            channelName = "Social (Facebook & Contacts)",
+            headlineStatus = "Connection Needed",
+            summary = "Sign in with Facebook Graph API v21.0 or grant Contacts permission to track close relationships, events, and birthdays.",
+            scorePercent = 50,
+            isAlert = false,
+            metrics = listOf(
+                ChannelMetricItem("Facebook Graph", "Not linked", "OAuth / Token"),
+                ChannelMetricItem("Close Circle", "—", "Contacts permission"),
+                ChannelMetricItem("Birthdays", "—", "Contacts sync")
+            ),
+            historyLog = listOf("Open Connections → Connect to Facebook to link Graph API or starred contacts.")
+        )
+
+        val anyAlert = hReport.isAlert || cReport.isAlert || fReport.isAlert || sReport.isAlert
+        val connectedNames = buildList {
+            if (latestHealthResult?.isConnected == true) add("Health Connect")
+            if (latestCalendarResult?.isConnected == true) add("Calendar/Tasks")
+            if (latestFinanceResult?.isConnected == true) add(latestFinanceResult?.sourceName ?: "Bank")
+            if (latestSocialResult?.isConnected == true) add("Facebook/Contacts")
+        }
+
+        val ruleExplanation = when {
+            connectedNames.isEmpty() ->
+                "LIVE MODE: 0 channels connected yet. Go to the Connections tab to authorize real Google Health, Calendar, Facebook, and Bank feeds."
+            anyAlert ->
+                "LIVE ANOMALY DETECTED across ${connectedNames.joinToString(", ")}: Muse's rules engine flagged a real-world imbalance."
+            else ->
+                "LIVE TELEMETRY ACTIVE (${connectedNames.joinToString(", ")}): All connected real-world channels are within healthy bounds."
+        }
+
+        return SyntheticTelemetrySnapshot(
+            scenario = MuseDemoScenario.LIVE_REAL_DATA,
+            deterministicTriggerActive = anyAlert,
+            triggeredRuleExplanation = ruleExplanation,
+            healthReport = hReport,
+            tasksReport = cReport,
+            financeReport = fReport,
+            socialReport = sReport,
+            weeklySleepHours = latestHealthResult?.weeklySleepHours ?: listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        )
+    }
 
     /**
      * Deterministic Event Detection & Synthetic Data Pump for the 3 MuseLife Demos.
@@ -119,6 +647,10 @@ class SerenityRepository {
         _telemetrySnapshot.value = snap
 
         when (scenario) {
+            MuseDemoScenario.LIVE_REAL_DATA -> {
+                rebuildLiveTelemetryAndEvaluateRules()
+            }
+
             MuseDemoScenario.NONE -> {
                 _demoRecoveryStage.value = DemoRecoveryStage.RECOVERED_HAPPY
                 _tamagotchiState.value = _tamagotchiState.value.copy(
@@ -322,6 +854,11 @@ class SerenityRepository {
                 "Verified Follow-Through: 14-Min Call with Sibling Logged",
                 "Reconnected with sibling & sent warm birthday note to friend"
             )
+            MuseDemoScenario.LIVE_REAL_DATA -> Triple(
+                "Live channels refreshed and aligned! Your real-world health, schedule, finance, and social streams are powering my aura! ✨",
+                "Verified Live Telemetry Check-In",
+                "Live bio-responsive sync verified across real device channels"
+            )
             MuseDemoScenario.NONE -> Triple(
                 "Verified daily balance across all channels! Our bio-responsive harmony is in full bloom! ✨",
                 "Verified Daily Harmony",
@@ -434,6 +971,7 @@ class SerenityRepository {
 
     fun updateMetaAiToken(newToken: String) {
         val trimmed = newToken.trim()
+        prefsStore?.metaAiToken = trimmed
         _metaAiConfig.value = _metaAiConfig.value.copy(
             token = trimmed,
             isConnected = trimmed.isNotEmpty()
@@ -1079,6 +1617,8 @@ class SerenityRepository {
         isRecovered: Boolean
     ): SyntheticTelemetrySnapshot {
         return when (scenario) {
+            MuseDemoScenario.LIVE_REAL_DATA -> buildLiveTelemetrySnapshot()
+
             MuseDemoScenario.SUCCESS_TRAP -> SyntheticTelemetrySnapshot(
                 scenario = scenario,
                 deterministicTriggerActive = !isRecovered,
