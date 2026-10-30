@@ -24,6 +24,7 @@ import com.example.model.SyntheticTelemetrySnapshot
 import com.example.model.TamagotchiState
 import com.example.model.ThoughtStream
 import com.example.model.VitalityCheckin
+import com.example.ui.theme.AppThemeMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -85,6 +86,11 @@ class SerenityViewModel(
     val metaAiConfig = repository.metaAiConfig
     val latestMuseAdvice = repository.latestMuseAdvice
     val integrations = repository.integrations
+    val appThemeMode = repository.appThemeMode
+
+    fun setAppThemeMode(mode: AppThemeMode) {
+        repository.setAppThemeMode(mode)
+    }
 
     init {
         syncAllRealChannels()
