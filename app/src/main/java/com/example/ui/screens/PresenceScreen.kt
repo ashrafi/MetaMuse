@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TaskAlt
@@ -98,18 +99,25 @@ import com.example.ui.components.SerenityPrimaryButton
 import com.example.ui.components.SerenitySecondaryButton
 import com.example.ui.components.SerenityStatusChip
 import com.example.ui.theme.AmberTertiary
+import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.BaseCanvas
 import com.example.ui.theme.CoralHoverGlow
 import com.example.ui.theme.CoralPrimary
 import com.example.ui.theme.DarkSageText
 import com.example.ui.theme.DeepEspresso
 import com.example.ui.theme.FloatingSurface
+import com.example.ui.theme.MetaCyanSecondary
+import com.example.ui.theme.MetaHorizonViolet
+import com.example.ui.theme.MetaPrimaryBlue
 import com.example.ui.theme.MintContainer
 import com.example.ui.theme.MintSecondary
 import com.example.ui.theme.RecessedContainer
 import com.example.ui.theme.SageAccent
+import com.example.ui.theme.SerenityAmberTertiary
+import com.example.ui.theme.SerenityCoralPrimary
 import com.example.ui.theme.SerenityError
 import com.example.ui.theme.SerenityErrorContainer
+import com.example.ui.theme.SerenityMintSecondary
 import com.example.ui.theme.SoftMutedText
 import com.example.ui.theme.SubtleContainer
 import com.example.ui.theme.WarmBorder
@@ -129,6 +137,7 @@ fun PresenceScreen(
     val isSyncingWithMuse by viewModel.isSyncingWithMuse.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
     val realState by viewModel.realConnectorState.collectAsState()
+    val currentTheme by viewModel.appThemeMode.collectAsState()
 
     var tokenInput by remember(metaAiConfig.token) { mutableStateOf(metaAiConfig.token) }
     var endpointInput by remember(metaAiConfig.endpointUrl) { mutableStateOf(metaAiConfig.endpointUrl) }
@@ -252,6 +261,8 @@ fun PresenceScreen(
                 integrations = integrations,
                 isMetaKeyConnected = metaAiConfig.token.isNotBlank(),
                 isSyncingWithMuse = isSyncingWithMuse || realState.isSyncing,
+                currentTheme = currentTheme,
+                onSelectTheme = { viewModel.setAppThemeMode(it) },
                 contentPadding = contentPadding,
                 onConnectGoogleHealth = requestRealHealthConnect,
                 onConnectCalendarTasks = requestRealCalendar,
@@ -391,6 +402,16 @@ fun PresenceScreen(
                             }
                         }
                     }
+                }
+
+                // =============================================================
+                // 0. COMPANION THEME & APPEARANCE (Meta Colors vs Luminous Serenity)
+                // =============================================================
+                item {
+                    ThemeAppearanceCard(
+                        currentTheme = currentTheme,
+                        onSelectTheme = { viewModel.setAppThemeMode(it) }
+                    )
                 }
 
                 // =============================================================
@@ -612,8 +633,7 @@ fun PresenceScreen(
                                         .clip(RoundedCornerShape(14.dp))
                                         .background(MintContainer)
                                         .padding(12.dp)
-                                ) {
-                                    Text(
+                                Sommers                                    Text(
                                         text = "🛡️ 100% On-Device Privacy: Your bank transactions, Health Connect biometrics, and calendars never leave your phone. Evaluated via local Llama 3 weights.",
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = DarkSageText,
@@ -1088,7 +1108,7 @@ private fun RealBankFinanceCard(
                         listOf("sandbox", "production").forEach { env ->
                             SerenityPillChip(
                                 text = env.replaceFirstChar { it.uppercase() },
-                                isSelected = plaidEnv.lowercase() == env,
+                                selected = plaidEnv.lowercase() == env,
                                 onClick = { onPlaidEnvChange(env) }
                             )
                         }
@@ -1307,6 +1327,8 @@ private fun SimpleConnectionsGraphicView(
     integrations: LifeSyncIntegrations,
     isMetaKeyConnected: Boolean,
     isSyncingWithMuse: Boolean,
+    currentTheme: AppThemeMode,
+    onSelectTheme: (AppThemeMode) -> Unit,
     contentPadding: PaddingValues,
     onConnectGoogleHealth: () -> Unit,
     onConnectCalendarTasks: () -> Unit,
@@ -1343,10 +1365,49 @@ private fun SimpleConnectionsGraphicView(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            SerenityStatusChip(
-                text = "$activeCount of 5 Real Streams Active • Tap Node to Connect",
-                pulseColor = if (activeCount >= 3) MintSecondary else AmberTertiary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SerenityStatusChip(
+                    text = "$activeCount of 5 Streams Active",
+                    pulseColor = if (activeCount >= 3) MintSecondary else AmberTertiary
+                )
+                Surface(
+                    shape = CircleShape,
+                    color = if (currentTheme == AppThemeMode.META_HORIZON) MetaPrimaryBlue.copy(alpha = 0.14f) else CoralPrimary.copy(alpha = 0.14f),
+                    modifier = Modifier
+                        .border(1.dp, WarmBorder, CircleShape)
+                        .clip(CircleShape)
+                        .clickable {
+                            val next = if (currentTheme == AppThemeMode.META_HORIZON) AppThemeMode.LUMINOUS_SERENITY else AppThemeMode.META_HORIZON
+                            onSelectTheme(next)
+                        }
+                        .testTag("quick_theme_toggle_chip")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (currentTheme == AppThemeMode.META_HORIZON) MetaPrimaryBlue else CoralPrimary)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (currentTheme == AppThemeMode.META_HORIZON) "Meta Theme" else "Serenity Theme",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = DeepEspresso,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Life-Sync Constellation",
@@ -1838,6 +1899,207 @@ private fun MuseAdviceSnippet(advice: MuseLifeAdvice) {
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ThemeAppearanceCard(
+    currentTheme: AppThemeMode,
+    onSelectTheme: (AppThemeMode) -> Unit
+) {
+    SerenityCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("section_theme_settings")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(CoralPrimary.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = null,
+                            tint = CoralPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Companion Appearance",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = DeepEspresso
+                            )
+                        )
+                        Text(
+                            text = "Design System & Color Tokens",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                color = DarkSageText,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    color = MintContainer
+                ) {
+                    Text(
+                        text = if (currentTheme == AppThemeMode.META_HORIZON) "Meta Active" else "Serenity Active",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = DarkSageText,
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Switch between the original Luminous Serenity palette and the official Meta Horizon brand colors. This updates the creature's crystal heart, orbital motes, bio-radar charts, buttons, and navigation aura.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = WarmSlateCharcoal,
+                    lineHeight = 19.sp
+                )
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // 1. Meta Horizon Theme Option (NEW)
+                ThemeOptionTile(
+                    title = "Meta Horizon",
+                    subtitle = "Meta Blue (#0866FF), Cyan & AI Violet",
+                    isSelected = currentTheme == AppThemeMode.META_HORIZON,
+                    accentColor = MetaPrimaryBlue,
+                    swatches = listOf(MetaPrimaryBlue, MetaCyanSecondary, MetaHorizonViolet),
+                    onClick = { onSelectTheme(AppThemeMode.META_HORIZON) },
+                    modifier = Modifier.weight(1f),
+                    testTag = "theme_option_meta"
+                )
+
+                // 2. Luminous Serenity Theme Option (ORIGINAL)
+                ThemeOptionTile(
+                    title = "Serenity",
+                    subtitle = "Warm Coral, Mint & Sunny Amber",
+                    isSelected = currentTheme == AppThemeMode.LUMINOUS_SERENITY,
+                    accentColor = SerenityCoralPrimary,
+                    swatches = listOf(SerenityCoralPrimary, SerenityMintSecondary, SerenityAmberTertiary),
+                    onClick = { onSelectTheme(AppThemeMode.LUMINOUS_SERENITY) },
+                    modifier = Modifier.weight(1f),
+                    testTag = "theme_option_serenity"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeOptionTile(
+    title: String,
+    subtitle: String,
+    isSelected: Boolean,
+    accentColor: Color,
+    swatches: List<Color>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = "theme_option_tile"
+) {
+    val borderColor = if (isSelected) accentColor else WarmBorder
+    val borderWidth = if (isSelected) 2.dp else 1.dp
+    val bgColor = if (isSelected) accentColor.copy(alpha = 0.08f) else SubtleContainer
+
+    Box(
+        modifier = modifier
+            .testTag(testTag)
+            .shadow(if (isSelected) 4.dp else 0.dp, RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(bgColor)
+            .border(borderWidth, borderColor, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    swatches.forEach { color ->
+                        Box(
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(1.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                        )
+                    }
+                }
+
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(accentColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = DeepEspresso
+                )
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = WarmSlateCharcoal,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
+                )
+            )
         }
     }
 }
