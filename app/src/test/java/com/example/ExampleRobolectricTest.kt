@@ -1,8 +1,11 @@
 package com.example
 
 import android.content.Context
+import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.SerenityRepository
+import com.example.data.connectors.BankFinanceConnector
+import com.example.data.connectors.FacebookSocialConnector
 import com.example.model.DemoRecoveryStage
 import com.example.model.MuseDemoScenario
 import com.example.model.PresenceMode
@@ -17,6 +20,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -196,5 +200,49 @@ class ExampleRobolectricTest {
         val initialTasks = repo.integrations.value.tasksAppConnected
         repo.toggleTasksApp()
         assertEquals(!initialTasks, repo.integrations.value.tasksAppConnected)
+    }
+
+    @Test
+    fun `facebook oauth redirect extracts real access token`() {
+        val connector = FacebookSocialConnector()
+        val uri = Uri.parse("metamuse://oauth/facebook#access_token=EAAB_REAL_TOKEN_999&expires_in=5184000")
+        val extracted = connector.extractAccessTokenFromRedirect(uri)
+        assertEquals("EAAB_REAL_TOKEN_999", extracted)
+    }
+
+    @Test
+    fun `bank csv importer parses real statement and flags delivery leak in live mode`() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val csvFile = File(context.cacheDir, "real_statement_test.csv")
+        csvFile.writeText(
+            """
+            Date,Description,Amount,Balance
+            2026-10-28,Payroll Direct Deposit,3200.00,5410.50
+            2026-10-27,DoorDash*ThaiKitchen,-36.40,2210.50
+            2026-10-26,Uber Eats Order,-42.10,2246.90
+            2026-10-25,Grubhub*BurgerJoint,-31.50,2289.00
+            2026-10-24,Instacart Convenience,-48.00,2320.50
+            2026-10-23,Postmates Late Night,-29.90,2368.50
+            """.trimIndent()
+        )
+
+        val repo = SerenityRepository(context)
+        assertEquals(MuseDemoScenario.LIVE_REAL_DATA, repo.activeDemoScenario.value)
+
+        repo.importRealBankCsv(Uri.fromFile(csvFile))
+
+        assertTrue(repo.integrations.value.financeAppConnected)
+        assertEquals(5, repo.realConnectorState.value.liveDeliveryOrderCount)
+        assertEquals(5410.50, repo.realConnectorState.value.liveTotalBalanceUsd ?: 0.0, 0.01)
+        assertTrue(repo.telemetrySnapshot.value.financeReport.isAlert)
+        assertEquals(TamagotchiMood.SICK, repo.tamagotchiState.value.mood)
+
+        val bankConnector = BankFinanceConnector()
+        val restored = bankConnector.restoreCachedCsv(
+            context.getSharedPreferences("metamuse_real_connectors_prefs", Context.MODE_PRIVATE)
+                .getString("cached_csv_transactions_json", "") ?: ""
+        )
+        assertNotNull(restored)
+        assertEquals(5, restored?.deliveryOrderCount)
     }
 }

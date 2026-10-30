@@ -1,10 +1,12 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -61,14 +63,26 @@ import com.example.ui.theme.WarmBorder
 import com.example.viewmodel.SerenityViewModel
 
 class MainActivity : ComponentActivity() {
+
+    private val serenityViewModel: SerenityViewModel by viewModels {
+        SerenityViewModel.provideFactory(applicationContext)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        intent?.data?.let { serenityViewModel.handleOAuthRedirect(it) }
         setContent {
             SerenityTheme {
-                SerenityMainApp()
+                SerenityMainApp(viewModel = serenityViewModel)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.data?.let { serenityViewModel.handleOAuthRedirect(it) }
     }
 }
 

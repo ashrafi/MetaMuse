@@ -1,6 +1,9 @@
 package com.example.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.SerenityRepository
 import com.example.model.CareActionLog
@@ -11,6 +14,7 @@ import com.example.model.LifeQuest
 import com.example.model.MemoryItem
 import com.example.model.MuseDemoScenario
 import com.example.model.PresenceMode
+import com.example.model.RealConnectorState
 import com.example.model.ScreenNav
 import com.example.model.SyntheticTelemetrySnapshot
 import com.example.model.TamagotchiState
@@ -54,6 +58,12 @@ class SerenityViewModel(
     val activeDemoScenario: StateFlow<MuseDemoScenario> = repository.activeDemoScenario
     val demoRecoveryStage: StateFlow<DemoRecoveryStage> = repository.demoRecoveryStage
     val telemetrySnapshot: StateFlow<SyntheticTelemetrySnapshot> = repository.telemetrySnapshot
+    val realConnectorState: StateFlow<RealConnectorState> = repository.realConnectorState
+
+    val healthConnectPermissions: Set<String> = repository.healthConnectManager.requiredPermissions
+
+    fun createHealthPermissionContract() =
+        repository.healthConnectManager.createPermissionRequestContract()
 
     val careLogs: StateFlow<List<CareActionLog>> = repository.careLogs
     val lifeQuests: StateFlow<List<LifeQuest>> = repository.lifeQuests
@@ -71,11 +81,94 @@ class SerenityViewModel(
     val latestMuseAdvice = repository.latestMuseAdvice
     val integrations = repository.integrations
 
+    init {
+        syncAllRealChannels()
+    }
+
+    fun syncAllRealChannels() {
+        viewModelScope.launch {
+            repository.syncAllRealChannels()
+        }
+    }
+
+    fun syncRealHealth() {
+        viewModelScope.launch {
+            repository.syncRealHealth()
+        }
+    }
+
+    fun syncRealCalendarAndTasks(googleTasksToken: String? = null) {
+        viewModelScope.launch {
+            repository.syncRealCalendarAndTasks(googleTasksToken)
+        }
+    }
+
+    fun syncRealFacebookAndContacts(
+        facebookAccessToken: String? = null,
+        facebookAppId: String? = null
+    ) {
+        viewModelScope.launch {
+            repository.syncRealFacebookAndContacts(facebookAccessToken, facebookAppId)
+        }
+    }
+
+    fun launchFacebookOAuth(appId: String) {
+        repository.launchFacebookOAuth(appId)
+    }
+
+    fun handleOAuthRedirect(uri: Uri?) {
+        if (uri == null) return
+        viewModelScope.launch {
+            val handled = repository.handleOAuthRedirect(uri)
+            if (handled) {
+                _currentScreen.value = ScreenNav.CONNECTIONS
+                _showFullConnections.value = true
+            }
+        }
+    }
+
+    fun connectPlaidBank(
+        clientId: String,
+        secret: String,
+        environment: String,
+        accessToken: String = ""
+    ) {
+        viewModelScope.launch {
+            repository.connectPlaidBank(clientId, secret, environment, accessToken)
+        }
+    }
+
+    fun connectSimpleFinBank(tokenOrUrl: String) {
+        viewModelScope.launch {
+            repository.connectSimpleFinBank(tokenOrUrl)
+        }
+    }
+
+    fun importRealBankCsv(uri: Uri) {
+        viewModelScope.launch {
+            repository.importRealBankCsv(uri)
+        }
+    }
+
+    fun openHealthConnectSettings() {
+        repository.openHealthConnectSettings()
+    }
+
+    fun insertRecoveryCalendarEvent(title: String, description: String) {
+        repository.insertRecoveryCalendarEvent(title, description)
+    }
+
     fun activateDemoScenario(scenario: MuseDemoScenario) {
         repository.activateDemoScenario(scenario)
+        if (scenario == MuseDemoScenario.LIVE_REAL_DATA) {
+            syncAllRealChannels()
+        }
     }
 
     fun completeDemoFollowThrough() {
+        if (activeDemoScenario.value == MuseDemoScenario.LIVE_REAL_DATA) {
+            syncAllRealChannels()
+        }
         repository.completeDemoFollowThrough()
     }
 
@@ -233,6 +326,18 @@ class SerenityViewModel(
                 if (!_isBreathingActive.value) break
                 _breathPhase.value = "Exhale softly (4s)..."
                 delay(4000)
+            }
+        }
+    }
+
+    companion object {
+        fun provideFactory(context: Context): ViewModelProvider.Factory {
+            val appCtx = context.applicationContext
+            return object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    return SerenityViewModel(SerenityRepository(appCtx)) as T
+                }
             }
         }
     }

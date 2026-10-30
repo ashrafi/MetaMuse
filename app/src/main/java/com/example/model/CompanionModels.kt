@@ -64,6 +64,15 @@ enum class MuseDemoScenario(
     val followThroughButtonLabel: String,
     val followThroughEventDetail: String
 ) {
+    LIVE_REAL_DATA(
+        id = "live_real_data",
+        title = "Live Real Data",
+        subtitle = "Real-time telemetry from Health Connect, Calendar/Tasks, Facebook Graph & Bank API",
+        intelligenceKind = "Live Bio-Responsive Telemetry",
+        detectedRuleSummary = "Evaluating live device & API channels from your real connected accounts.",
+        followThroughButtonLabel = "Re-Sync All Real Channels Now",
+        followThroughEventDetail = "Re-synced live Health Connect, Calendar/Tasks, Finance, and Social streams"
+    ),
     NONE(
         id = "healthy_baseline",
         title = "Healthy Baseline",
@@ -251,12 +260,50 @@ data class MusePillarAdvice(
 )
 
 data class LifeSyncIntegrations(
-    val googleHealthConnected: Boolean = true,
-    val googleHealthStats: String = "7,840 steps • 7.4h sleep • 1.8L water synced",
-    val facebookConnected: Boolean = true,
-    val facebookStats: String = "Synced: Close friends, sibling call log & social calendar",
-    val financeAppConnected: Boolean = true,
-    val financeAppStats: String = "Daily mindful budget on track • Peace of mind +15%",
-    val tasksAppConnected: Boolean = true,
-    val tasksAppStats: String = "4 of 5 focus tasks completed today (+20% Flow)"
+    val googleHealthConnected: Boolean = false,
+    val googleHealthStats: String = "Not connected • Grant Android Health Connect access",
+    val facebookConnected: Boolean = false,
+    val facebookStats: String = "Not connected • Connect Facebook Graph API or Contacts",
+    val financeAppConnected: Boolean = false,
+    val financeAppStats: String = "Not connected • Link Plaid API, SimpleFIN, or Bank CSV",
+    val tasksAppConnected: Boolean = false,
+    val tasksAppStats: String = "Not connected • Grant Android Calendar / Google Tasks access"
+)
+
+data class RealConnectorState(
+    val isSyncing: Boolean = false,
+    val lastSyncSummary: String = "Ready to connect live data streams",
+    val lastError: String? = null,
+    // 1. Google Health Connect
+    val healthSdkAvailable: Boolean = true,
+    val healthPermissionsGranted: Boolean = false,
+    val liveStepsToday: Long = 0L,
+    val liveAvgSleepHours: Float = 0f,
+    val liveHeartRateBpm: Long = 0L,
+    val liveHydrationLiters: Double = 0.0,
+    // 2. Calendar & Google Tasks
+    val calendarPermissionGranted: Boolean = false,
+    val googleTasksToken: String = "",
+    val liveEventsToday: Int = 0,
+    val liveCompletedEventsToday: Int = 0,
+    val liveLateNightEvents7d: Int = 0,
+    val liveCanceledEvents14d: Int = 0,
+    // 3. Facebook Graph API & Close Contacts
+    val facebookAppId: String = "",
+    val facebookAccessToken: String = "",
+    val facebookUserName: String? = null,
+    val contactsPermissionGranted: Boolean = false,
+    val liveStarredContactsCount: Int = 0,
+    val liveNeglectedContactsCount: Int = 0,
+    // 4. Bank / Finance (Plaid + SimpleFIN + CSV)
+    val plaidClientId: String = "",
+    val plaidSecret: String = "",
+    val plaidEnvironment: String = "sandbox", // "sandbox" or "production"
+    val plaidAccessToken: String = "",
+    val simpleFinUrlOrToken: String = "",
+    val connectedBankSource: String? = null, // "Plaid API", "SimpleFIN", "CSV Statement"
+    val liveTotalBalanceUsd: Double? = null,
+    val liveMonthlySpendUsd: Double = 0.0,
+    val liveDeliveryOrderCount: Int = 0,
+    val liveDeliverySpendUsd: Double = 0.0
 )
