@@ -36,13 +36,17 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.platform.LocalContext
+import com.example.model.ActionableNudge
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -141,12 +145,16 @@ fun AttuneScreen(
         label = "HomeViewTransition"
     ) { isFullScreen ->
         if (!isFullScreen) {
+            val isSpeaking by viewModel.isSpeaking.collectAsState()
+            val context = LocalContext.current
             AvatarOnlyHomeView(
                 tamagotchi = tamagotchi,
                 activeScenario = activeScenario,
                 recoveryStage = recoveryStage,
                 telemetry = telemetry,
                 latestCompanionMessage = messages.lastOrNull { !it.isFromUser },
+                actionableNudge = latestMuseAdvice?.actionableNudge,
+                isSpeaking = isSpeaking,
                 contentPadding = contentPadding,
                 onPet = { viewModel.petTamagotchi() },
                 onSelectScenario = { viewModel.activateDemoScenario(it) },
@@ -154,6 +162,13 @@ fun AttuneScreen(
                 onVerifyFollowThrough = { viewModel.completeDemoFollowThrough() },
                 onOpenDataTab = { viewModel.navigateTo(ScreenNav.DATA) },
                 onOpenFullHome = { viewModel.setShowFullHome(true) },
+                onToggleSpeech = {
+                    val speech = messages.lastOrNull { !it.isFromUser }?.content ?: tamagotchi.speech
+                    viewModel.speakPrescription(speech, context)
+                },
+                onExecuteNudge = { nudge ->
+                    viewModel.executeActionableNudge(context, nudge)
+                },
                 modifier = modifier
             )
         } else {
@@ -633,6 +648,8 @@ private fun AvatarOnlyHomeView(
     recoveryStage: DemoRecoveryStage,
     telemetry: SyntheticTelemetrySnapshot,
     latestCompanionMessage: ChatMessage?,
+    actionableNudge: ActionableNudge?,
+    isSpeaking: Boolean,
     contentPadding: PaddingValues,
     onPet: () -> Unit,
     onSelectScenario: (MuseDemoScenario) -> Unit,
@@ -640,6 +657,8 @@ private fun AvatarOnlyHomeView(
     onVerifyFollowThrough: () -> Unit,
     onOpenDataTab: () -> Unit,
     onOpenFullHome: () -> Unit,
+    onToggleSpeech: () -> Unit,
+    onExecuteNudge: (ActionableNudge) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val moodPulseColor = when (tamagotchi.mood) {
@@ -827,14 +846,28 @@ private fun AvatarOnlyHomeView(
                                 fontSize = 11.sp
                             )
                         )
-                        Text(
-                            text = "LVL ${tamagotchi.level}",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = SoftMutedText,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = onToggleSpeech,
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isSpeaking) Icons.Default.VolumeUp else Icons.Default.GraphicEq,
+                                    contentDescription = "Speak aloud",
+                                    tint = if (isSpeaking) CoralPrimary else SoftMutedText,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "LVL ${tamagotchi.level}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = SoftMutedText,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                )
                             )
-                        )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -850,6 +883,37 @@ private fun AvatarOnlyHomeView(
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    // Proactive Actionable Nudge (WhatsApp outreach, Calendar block, or Hydro/Walk)
+                    if (actionableNudge != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val isWhatsApp = actionableNudge.type.equals("WHATSAPP", ignoreCase = true)
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isWhatsApp) Color(0xFFE7FCE8) else MintContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, if (isWhatsApp) Color(0xFF25D366) else MintSecondary, CircleShape)
+                                .clip(CircleShape)
+                                .clickable { onExecuteNudge(actionableNudge) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = actionableNudge.actionButtonText,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = if (isWhatsApp) Color(0xFF0F5A29) else DarkSageText,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
 
                     // Interactive 1-tap Demo Action right on the Home screen
                     if (activeScenario != MuseDemoScenario.NONE && recoveryStage == DemoRecoveryStage.HOPEFUL_COMMITTED) {
